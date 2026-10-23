@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackupDialog, useAutoBackup } from './Backup';
 import { Card } from './Card';
+import { Recorder } from './Recorder';
 import {
-  exportBackup, getAll, importBackup, importBookmarks, put, putBlob, remove, subscribe, uid,
-  type Folder, type Item, type ItemType,
+  exportBackup, getAll, getUsage, importBackup, importBookmarks, put, putBlob, remove, subscribe, uid,
+  type Folder, type Item, type ItemType, type Usage,
 } from './db';
 import { supabase } from './supabase';
-import { beep, download, formatDue, hostOf, normalizeUrl, toLocalInput } from './util';
+import { beep, download, formatDue, formatSize, hostOf, normalizeUrl, toLocalInput } from './util';
 
 type View = { kind: 'all' } | { kind: 'tasks' } | { kind: 'folder'; id: string };
-type Mode = 'link' | 'note' | 'task' | 'file';
+type Mode = 'link' | 'note' | 'task' | 'voice' | 'file';
 
 const TYPE_LABELS: Record<ItemType, string> = { link: 'Liens', note: 'Notes', file: 'Fichiers', task: 'Tâches' };
 const ICONS = ['📁', '💡', '📚', '🎬', '🎵', '💼', '🏋️', '🍳', '✈️', '🏠', '💻', '🎨', '🛒', '❤️'];
@@ -24,6 +25,7 @@ export default function App({ email }: { email?: string }) {
   const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [usageTick, setUsageTick] = useState(0);
 
   const reload = useCallback(async () => {
     let fs = await getAll<Folder>('folders');
@@ -122,16 +124,30 @@ export default function App({ email }: { email?: string }) {
   const addFiles = async (files: FileList | File[], folderId = targetFolderId) => {
     if (!folderId) return;
     const list = Array.from(files); // the input's live FileList is cleared right after
+    let added = 0;
     for (const file of list) {
       const id = uid();
-      await putBlob(id, file);
-      await put('items', {
-        id, folderId, type: 'file', title: file.name, fileName: file.name,
-        mime: file.type, size: file.size, createdAt: Date.now(),
-      });
+      // Row first: the server checks the storage quota on it, and only then accepts the upload.
+      try {
+        await put('items', {
+          id, folderId, type: 'file', title: file.name.replace(/\.[^.]+$/, '') || file.name, fileName: file.name,
+          mime: file.type, size: file.size, createdAt: Date.now(),
+        });
+      } catch (e) {
+        toast(`${file.name} : ${(e as Error).message}`);
+        continue;
+      }
+      try {
+        await putBlob(id, file);
+        added++;
+      } catch (e) {
+        await remove('items', id).catch(() => {});
+        toast(`${file.name} : envoi impossible (${(e as Error).message})`);
+      }
     }
-    toast(`${list.length} fichier(s) ajouté(s)`);
+    if (added) toast(`${added} fichier(s) ajouté(s)`);
     await reload();
+    setUsageTick((n) => n + 1);
   };
 
   const createFolder = async (parentId: string | null) => {
@@ -205,7 +221,7 @@ export default function App({ email }: { email?: string }) {
           activeId={view.kind === 'folder' && !query ? view.id : null}
           onSelect={(id) => { setView({ kind: 'folder', id }); setQuery(''); setMenuOpen(false); }}
         />
-        <Tools reload={reload} toast={toast} email={email} />
+        <Tools reload={reload} toast={toast} email={email} usageTick={usageTick + items.length} />
       </aside>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
 
@@ -345,7 +361,7 @@ function IconPicker({ value, onChange }: { value: string; onChange: (v: string) 
 
 function Composer(p: {
   defaultMode: Mode; folderName: string;
-  onAdd: (item: Omit<Item, 'id' | 'createdAt' | 'folderId'>) => void; onFiles: (f: FileList) => void;
+  onAdd: (item: Omit<Item, 'id' | 'createdAt' | 'folderId'>) => void; onFiles: (f: FileList | File[]) => void;
 }) {
   const [mode, setMode] = useState<Mode>(p.defaultMode);
   const [main, setMain] = useState('');
@@ -374,7 +390,9 @@ function Composer(p: {
     reset();
   };
 
-  const tabs: [Mode, string][] = [['link', '🔗 Lien'], ['note', '📝 Note'], ['task', '⏰ Tâche'], ['file', '📎 Fichier']];
+  const tabs: [Mode, string][] = [
+    ['link', '🔗 Lien'], ['note', '📝 Note'], ['task', '⏰ Tâche'], ['voice', '🎤 Vocal'], ['file', '📎 Fichier'],
+  ];
 
   return (
     <form className="composer" onSubmit={submit}>
@@ -406,6 +424,7 @@ function Composer(p: {
           <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Rappel" />
         </div>
       )}
+      {mode === 'voice' && <Recorder onSave={(f) => p.onFiles([f])} />}
       {mode === 'file' && (
         <div className="fields">
           <button type="button" className="dropzone" onClick={() => fileRef.current?.click()}>
@@ -415,7 +434,7 @@ function Composer(p: {
             onChange={(e) => { if (e.target.files?.length) p.onFiles(e.target.files); e.target.value = ''; }} />
         </div>
       )}
-      {mode !== 'file' && (
+      {mode !== 'file' && mode !== 'voice' && (
         <div className="composer-foot">
           {error && <span className="error">{error}</span>}
           <button className="btn-primary" type="submit">Ajouter</button>
@@ -475,7 +494,11 @@ function EditDialog(p: {
   );
 }
 
-function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; email?: string }) {
+function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; email?: string; usageTick: number }) {
+  const [usage, setUsage] = useState<Usage | null>(null);
+  useEffect(() => {
+    getUsage().then(setUsage);
+  }, [p.usageTick]);
   const bookmarksRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
   const [driveOpen, setDriveOpen] = useState(false);
@@ -494,6 +517,7 @@ function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; ema
         💾 Exporter un fichier de sauvegarde
       </button>
       <button className="btn-ghost small" onClick={() => backupRef.current?.click()}>↩︎ Restaurer un fichier de sauvegarde</button>
+      {usage && <UsageBar usage={usage} />}
       {supabase ? (
         <>
           <p className="meta small-print">☁️ Synchronisé · {p.email}</p>
@@ -524,6 +548,22 @@ function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; ema
           p.toast((err as Error).message);
         }
       }} />
+    </div>
+  );
+}
+
+const PLAN_NAMES: Record<string, string> = { free: 'Gratuit', plus: 'Plus', premium: 'Premium' };
+
+function UsageBar({ usage }: { usage: Usage }) {
+  const pct = Math.min(100, (usage.usedBytes / usage.quotaBytes) * 100);
+  return (
+    <div className="usage">
+      <div className="usage-head">
+        <span>Formule {PLAN_NAMES[usage.plan] ?? usage.plan}</span>
+        <span className="meta">{formatSize(usage.usedBytes)} / {formatSize(usage.quotaBytes)}</span>
+      </div>
+      <div className="usage-track"><div className={`usage-fill${pct > 90 ? ' full' : ''}`} style={{ width: `${pct}%` }} /></div>
+      {pct > 90 && <span className="meta">Espace presque plein</span>}
     </div>
   );
 }

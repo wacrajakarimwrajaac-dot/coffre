@@ -1,7 +1,7 @@
 // Google Drive backup, WhatsApp-style: a visible "Coffre" folder in the user's own Drive.
 // Folder tree is mirrored, files are uploaded once (incremental), and everything else
 // (folders, notes, links, tasks + Drive ids) lives in "coffre-sauvegarde.json".
-import { getAll, getBlob, put, putBlob, remove, type Folder, type Item } from './db';
+import { getAll, getBlob, parentsFirst, put, putBlob, remove, type Folder, type Item } from './db';
 
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
@@ -270,15 +270,7 @@ export async function restoreFromDrive(progress: Progress = () => {}): Promise<{
     }
   }
 
-  // Parents before children so cloud foreign keys are satisfied.
-  const pending = [...data.folders];
-  const done = new Set<string>();
-  while (pending.length) {
-    const i = pending.findIndex((f) => !f.parentId || done.has(f.parentId) || !pending.some((p) => p.id === f.parentId));
-    const [f] = pending.splice(i === -1 ? 0 : i, 1);
-    await put('folders', f);
-    done.add(f.id);
-  }
+  for (const f of parentsFirst(data.folders)) await put('folders', f);
 
   const files = data.items.filter((i) => i.type === 'file');
   let n = 0;
@@ -287,7 +279,10 @@ export async function restoreFromDrive(progress: Progress = () => {}): Promise<{
     if (it.type === 'file') {
       if (!drive) continue;
       progress(`Téléchargement ${++n}/${files.length} : ${it.title}`);
-      await putBlob(it.id, await (await gfetch(`${API}/files/${drive.id}?alt=media`)).blob());
+      const blob = await (await gfetch(`${API}/files/${drive.id}?alt=media`)).blob();
+      await put('items', it); // row first: the server checks the quota and then allows the upload
+      await putBlob(it.id, blob);
+      continue;
     }
     await put('items', it);
   }

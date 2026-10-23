@@ -67,3 +67,115 @@ drop policy if exists "files_own" on storage.objects;
 create policy "files_own" on storage.objects for all to authenticated
   using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text)
   with check (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- ============================================================================
+-- Formules et quota de stockage (contrôlé côté serveur)
+-- ============================================================================
+
+create table if not exists public.plans (
+  id text primary key,
+  name text not null,
+  quota_bytes bigint not null,
+  max_file_bytes bigint not null
+);
+
+insert into public.plans (id, name, quota_bytes, max_file_bytes) values
+  ('free',    'Gratuit',  500::bigint * 1024 * 1024,        50::bigint * 1024 * 1024),
+  ('plus',    'Plus',     10::bigint * 1024 * 1024 * 1024,  500::bigint * 1024 * 1024),
+  ('premium', 'Premium',  50::bigint * 1024 * 1024 * 1024,  2::bigint * 1024 * 1024 * 1024)
+on conflict (id) do update
+  set name = excluded.name, quota_bytes = excluded.quota_bytes, max_file_bytes = excluded.max_file_bytes;
+
+alter table public.plans enable row level security;
+drop policy if exists "plans_read" on public.plans;
+create policy "plans_read" on public.plans for select to anon, authenticated using (true);
+
+-- Formule de chaque utilisateur. Pas de ligne = 'free'. Seul l'admin (ou un futur webhook de paiement) la modifie.
+create table if not exists public.profiles (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  plan text not null default 'free' references public.plans (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+drop policy if exists "profiles_read_own" on public.profiles;
+create policy "profiles_read_own" on public.profiles for select to authenticated
+  using (user_id = (select auth.uid()));
+
+-- Espace réellement occupé : taille des fichiers dans le stockage (pas la taille déclarée par l'app).
+create or replace function public.used_bytes(uid uuid) returns bigint
+language sql stable security definer set search_path = '' as $$
+  select coalesce(sum((o.metadata ->> 'size')::bigint), 0)
+  from storage.objects o
+  where o.bucket_id = 'files' and (storage.foldername(o.name))[1] = uid::text
+$$;
+revoke all on function public.used_bytes(uuid) from public, anon, authenticated;
+
+create or replace function public.storage_usage()
+returns table (plan text, used_bytes bigint, quota_bytes bigint, max_file_bytes bigint)
+language sql stable security definer set search_path = '' as $$
+  select p.id, public.used_bytes((select auth.uid())), p.quota_bytes, p.max_file_bytes
+  from public.plans p
+  where p.id = coalesce((select pr.plan from public.profiles pr where pr.user_id = (select auth.uid())), 'free')
+$$;
+revoke all on function public.storage_usage() from public, anon;
+grant execute on function public.storage_usage() to authenticated;
+
+-- Refuse un nouveau fichier si la formule ne le permet pas (taille max ou espace plein).
+create or replace function public.check_file_quota() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  p public.plans;
+begin
+  if new.type <> 'file' then return new; end if;
+  if tg_op = 'UPDATE' and new.size is not distinct from old.size then return new; end if;
+  select pl.* into p from public.plans pl
+  where pl.id = coalesce((select pr.plan from public.profiles pr where pr.user_id = new.user_id), 'free');
+  if coalesce(new.size, 0) > p.max_file_bytes then
+    raise exception 'Fichier trop lourd pour la formule % (max % Mo)', p.name, p.max_file_bytes / 1048576
+      using errcode = 'P0001';
+  end if;
+  if public.used_bytes(new.user_id) + coalesce(new.size, 0) > p.quota_bytes then
+    raise exception 'Espace plein : la formule % comprend % Mo', p.name, p.quota_bytes / 1048576
+      using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists items_file_quota on public.items;
+create trigger items_file_quota before insert or update of size, type on public.items
+  for each row execute function public.check_file_quota();
+
+-- Un fichier ne peut être envoyé que si sa fiche (vérifiée par le quota) existe déjà.
+drop policy if exists "files_own" on storage.objects;
+drop policy if exists "files_read_own" on storage.objects;
+drop policy if exists "files_delete_own" on storage.objects;
+drop policy if exists "files_write_checked" on storage.objects;
+drop policy if exists "files_update_checked" on storage.objects;
+
+create policy "files_read_own" on storage.objects for select to authenticated
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+create policy "files_delete_own" on storage.objects for delete to authenticated
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+create policy "files_write_checked" on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'files'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and exists (
+      select 1 from public.items i
+      where i.user_id = (select auth.uid()) and i.type = 'file' and i.id::text = storage.filename(name)
+    )
+  );
+
+create policy "files_update_checked" on storage.objects for update to authenticated
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (
+    bucket_id = 'files'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and exists (
+      select 1 from public.items i
+      where i.user_id = (select auth.uid()) and i.type = 'file' and i.id::text = storage.filename(name)
+    )
+  );

@@ -28,4 +28,6 @@ npm run build    # vérification des types + build de production dans dist/
 - Sauvegarde automatique dans Google Drive, façon WhatsApp (dossier « Coffre » visible, fichiers inclus), et restauration
 - Export / restauration d’un fichier de sauvegarde JSON (fichiers inclus)
 - Connexion « Continuer avec Google »
+- 🎤 Enregistrement vocal
+- Formules Gratuit / Plus / Premium avec quota de stockage contrôlé côté serveur (voir [TARIFS.md](TARIFS.md))
 - Comptes (email + mot de passe) et synchronisation en temps réel entre appareils (mode cloud)

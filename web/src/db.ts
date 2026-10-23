@@ -142,6 +142,39 @@ export function subscribe(onChange: () => void): () => void {
   return () => void client.removeChannel(channel);
 }
 
+/** Orders folders so that every parent is written before its children. */
+export function parentsFirst(folders: Folder[]): Folder[] {
+  const ids = new Set(folders.map((f) => f.id));
+  const out: Folder[] = [];
+  const seen = new Set<string>();
+  const visit = (f: Folder, byId: Map<string, Folder>) => {
+    if (seen.has(f.id)) return;
+    seen.add(f.id);
+    if (f.parentId && ids.has(f.parentId)) visit(byId.get(f.parentId)!, byId);
+    out.push(f);
+  };
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  folders.forEach((f) => visit(f, byId));
+  return out;
+}
+
+// ---- Storage usage (cloud: enforced server-side per plan) ----
+
+export interface Usage {
+  plan: string;
+  usedBytes: number;
+  quotaBytes: number;
+  maxFileBytes: number;
+}
+
+export async function getUsage(): Promise<Usage | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc('storage_usage');
+  if (error || !data?.[0]) return null;
+  const r = data[0];
+  return { plan: r.plan, usedBytes: Number(r.used_bytes), quotaBytes: Number(r.quota_bytes), maxFileBytes: Number(r.max_file_bytes) };
+}
+
 // ---- Backup ----
 
 const toDataUrl = (blob: Blob) =>
@@ -167,8 +200,8 @@ export async function exportBackup(): Promise<Blob> {
 export async function importBackup(file: File) {
   const data = JSON.parse(await file.text());
   if (data.app !== 'coffre') throw new Error('Fichier de sauvegarde invalide');
-  for (const f of data.folders as Folder[]) await put('folders', f);
-  for (const it of data.items as Item[]) await put('items', it);
+  for (const f of parentsFirst(data.folders as Folder[])) await put('folders', f);
+  for (const it of data.items as Item[]) await put('items', it); // rows before files (server quota check)
   for (const [id, url] of Object.entries(data.blobs as Record<string, string>)) {
     await putBlob(id, await (await fetch(url)).blob());
   }
