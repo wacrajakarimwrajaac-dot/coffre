@@ -20,7 +20,7 @@ npm run db:setup
 
 ## 3. Brancher le site
 Dans Supabase, va dans **Project Settings → API** et copie **Project URL** et la clé **anon / publishable**.
-Crée le fichier `web/.env.local` :
+Déjà fait pour le projet `gsgfqdtduuepxdkoycof` dans `web/.env`. Pour un autre projet, crée `web/.env.local` :
 ```
 VITE_SUPABASE_URL=https://xxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=<clé anon>
