@@ -1,0 +1,11 @@
+{
+  "name": "coffre",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:setup": "node scripts/db-setup.mjs"
+  },
+  "devDependencies": {
+    "pg": "^8.16.3"
+  }
+}

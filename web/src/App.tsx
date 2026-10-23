@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from './Card';
 import {
-  exportBackup, getAll, importBackup, importBookmarks, put, putBlob, remove, uid,
+  exportBackup, getAll, importBackup, importBookmarks, put, putBlob, remove, subscribe, uid,
   type Folder, type Item, type ItemType,
 } from './db';
+import { supabase } from './supabase';
 import { beep, download, formatDue, hostOf, normalizeUrl, toLocalInput } from './util';
 
 type View = { kind: 'all' } | { kind: 'tasks' } | { kind: 'folder'; id: string };
@@ -12,7 +13,7 @@ type Mode = 'link' | 'note' | 'task' | 'file';
 const TYPE_LABELS: Record<ItemType, string> = { link: 'Liens', note: 'Notes', file: 'Fichiers', task: 'Tâches' };
 const ICONS = ['📁', '💡', '📚', '🎬', '🎵', '💼', '🏋️', '🍳', '✈️', '🏠', '💻', '🎨', '🛒', '❤️'];
 
-export default function App() {
+export default function App({ email }: { email?: string }) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [view, setView] = useState<View>({ kind: 'all' });
@@ -34,15 +35,22 @@ export default function App() {
     setItems((await getAll<Item>('items')).sort((a, b) => b.createdAt - a.createdAt));
   }, []);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
-
   const toast = useCallback((text: string) => {
     const id = uid();
     setToasts((t) => [...t, { id, text }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
   }, []);
+
+  useEffect(() => {
+    reload().catch((e) => toast((e as Error).message));
+    const unsubscribe = subscribe(() => void reload());
+    const onFocus = () => void reload();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [reload, toast]);
 
   // ---- Reminders: checked while the page is open ----
   const itemsRef = useRef(items);
@@ -193,7 +201,7 @@ export default function App() {
           activeId={view.kind === 'folder' && !query ? view.id : null}
           onSelect={(id) => { setView({ kind: 'folder', id }); setQuery(''); setMenuOpen(false); }}
         />
-        <Tools reload={reload} toast={toast} />
+        <Tools reload={reload} toast={toast} email={email} />
       </aside>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
 
@@ -463,7 +471,7 @@ function EditDialog(p: {
   );
 }
 
-function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void }) {
+function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; email?: string }) {
   const bookmarksRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
   const [notif, setNotif] = useState(() => ('Notification' in window ? Notification.permission : 'denied'));
@@ -480,7 +488,14 @@ function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void }) {
         💾 Exporter une sauvegarde
       </button>
       <button className="btn-ghost small" onClick={() => backupRef.current?.click()}>↩︎ Restaurer une sauvegarde</button>
-      <p className="meta small-print">Tes données restent dans ce navigateur. Exporte une sauvegarde régulièrement.</p>
+      {supabase ? (
+        <>
+          <p className="meta small-print">☁️ Synchronisé · {p.email}</p>
+          <button className="btn-ghost small" onClick={() => supabase!.auth.signOut()}>Se déconnecter</button>
+        </>
+      ) : (
+        <p className="meta small-print">Mode local : tes données restent dans ce navigateur. Exporte une sauvegarde régulièrement.</p>
+      )}
 
       <input ref={bookmarksRef} type="file" accept=".html,.htm" hidden onChange={async (e) => {
         const f = e.target.files?.[0];
