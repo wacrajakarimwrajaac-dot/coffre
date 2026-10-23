@@ -9,8 +9,11 @@ WebBrowser.maybeCompleteAuthSession();
  * The redirect URL (coffre://auth-callback, or exp://… in Expo Go) must be allowed in
  * Supabase → Authentication → URL Configuration → Redirect URLs.
  */
+/** Where Supabase sends the user back after Google (exp://… in Expo Go, coffre://… in builds). */
+export const googleRedirectUrl = () => Linking.createURL('auth-callback');
+
 export async function signInWithGoogle(): Promise<void> {
-  const redirectTo = Linking.createURL('auth-callback');
+  const redirectTo = googleRedirectUrl();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo, skipBrowserRedirect: true },

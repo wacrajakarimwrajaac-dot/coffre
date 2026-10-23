@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { signInWithGoogle } from '@/lib/googleAuth';
+import { googleRedirectUrl, signInWithGoogle } from '@/lib/googleAuth';
 import { supabase } from '@/lib/supabase';
 import { C } from '@/lib/theme';
 import { Button, Input, s } from './ui';
@@ -55,6 +55,7 @@ export function Login() {
             <Text style={{ color: '#4285f4', fontWeight: '900', fontSize: 16 }}>G</Text>
             <Text style={{ color: '#1f1f1f', fontWeight: '600', fontSize: 16 }}>{googleBusy ? 'Connexion…' : 'Continuer avec Google'}</Text>
           </Pressable>
+          {__DEV__ && <Text style={[s.muted, { fontSize: 11 }]} selectable>Retour : {googleRedirectUrl()}</Text>}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
             <Text style={s.muted}>ou</Text>
