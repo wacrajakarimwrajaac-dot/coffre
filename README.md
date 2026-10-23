@@ -5,7 +5,7 @@ Un seul endroit pour ranger, par sujet : liens (reels Instagram/Facebook, YouTub
 - `web/` : site (Vite + React + TypeScript).
 - `supabase/schema.sql` : base cloud (Supabase) avec tables, sécurité par utilisateur et stockage des fichiers.
 - **Configuration de la base cloud : voir [SETUP.md](SETUP.md).** Si Supabase n'est pas configuré, le site fonctionne en mode local (IndexedDB, dans le navigateur).
-- Application mobile : prévue ensuite.
+- `mobile/` : application Android + iPhone (Expo), même compte et même base. Voir [mobile/README.md](mobile/README.md).
 
 ## Lancer le site
 

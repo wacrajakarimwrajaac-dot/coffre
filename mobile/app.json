@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Coffre",
+    "slug": "coffre",
+    "scheme": "coffre",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0b1020",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.coffre.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Coffre utilise le micro pour enregistrer tes notes vocales.",
+        "NSPhotoLibraryUsageDescription": "Coffre accède à tes photos et vidéos pour les ranger dans tes dossiers."
+      }
+    },
+    "android": {
+      "package": "com.coffre.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b1020",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": ["android.permission.SCHEDULE_EXACT_ALARM", "android.permission.RECORD_AUDIO"],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-audio", { "microphonePermission": "Coffre utilise le micro pour enregistrer tes notes vocales." }],
+      ["expo-notifications", { "color": "#ff6b5b" }],
+      ["expo-image-picker", { "photosPermission": "Coffre accède à tes photos et vidéos pour les ranger dans tes dossiers." }],
+      "expo-video",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}
