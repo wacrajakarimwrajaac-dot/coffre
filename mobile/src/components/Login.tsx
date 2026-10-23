@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { signInWithGoogle } from '@/lib/googleAuth';
 import { supabase } from '@/lib/supabase';
 import { C } from '@/lib/theme';
 import { Button, Input, s } from './ui';
@@ -11,6 +12,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const submit = async () => {
     setBusy(true);
@@ -22,6 +24,18 @@ export function Login() {
     setBusy(false);
     if (error) return setMsg({ text: error.message, error: true });
     if (mode === 'up' && !data.session) setMsg({ text: 'Compte créé. Confirme ton adresse via l’email reçu, puis connecte-toi.' });
+  };
+
+  const google = async () => {
+    setMsg(null);
+    setGoogleBusy(true);
+    try {
+      await signInWithGoogle();
+    } catch (e) {
+      setMsg({ text: (e as Error).message, error: true });
+    } finally {
+      setGoogleBusy(false);
+    }
   };
 
   const reset = async () => {
@@ -36,6 +50,16 @@ export function Login() {
         <View style={{ gap: 14 }}>
           <Text style={{ color: C.text, fontSize: 32, fontWeight: '800' }}><Text style={{ color: C.primary }}>◆</Text> Coffre</Text>
           <Text style={s.muted}>Tous tes liens, notes, vocaux, fichiers et tâches, synchronisés partout.</Text>
+          <Pressable onPress={google} disabled={googleBusy}
+            style={{ backgroundColor: '#fff', borderRadius: 12, paddingVertical: 13, flexDirection: 'row', justifyContent: 'center', gap: 10, opacity: googleBusy ? 0.6 : 1 }}>
+            <Text style={{ color: '#4285f4', fontWeight: '900', fontSize: 16 }}>G</Text>
+            <Text style={{ color: '#1f1f1f', fontWeight: '600', fontSize: 16 }}>{googleBusy ? 'Connexion…' : 'Continuer avec Google'}</Text>
+          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
+            <Text style={s.muted}>ou</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
+          </View>
           <Input placeholder="Email" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} />
           <Input placeholder="Mot de passe" secureTextEntry autoComplete={mode === 'in' ? 'current-password' : 'new-password'}
             value={password} onChangeText={setPassword} />

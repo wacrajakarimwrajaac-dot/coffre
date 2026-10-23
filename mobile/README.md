@@ -3,7 +3,7 @@
 Expo / React Native, même base Supabase et même compte que le site.
 
 ## Fonctions
-- Connexion (email + mot de passe), synchronisation en temps réel avec le site
+- Connexion (email + mot de passe ou Google), synchronisation en temps réel avec le site
 - Dossiers et sous-dossiers, icônes, recherche globale, filtres
 - Liens (Instagram, Facebook, YouTube…) : le lien copié est collé automatiquement
 - Notes, tâches avec **alarme qui sonne même app fermée** (notification locale, mode « réveil » sur Android)

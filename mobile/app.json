@@ -24,17 +24,38 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["android.permission.SCHEDULE_EXACT_ALARM", "android.permission.RECORD_AUDIO"],
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECORD_AUDIO"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
       "expo-router",
-      ["expo-audio", { "microphonePermission": "Coffre utilise le micro pour enregistrer tes notes vocales." }],
-      ["expo-notifications", { "color": "#ff6b5b" }],
-      ["expo-image-picker", { "photosPermission": "Coffre accède à tes photos et vidéos pour les ranger dans tes dossiers." }],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Coffre utilise le micro pour enregistrer tes notes vocales."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#ff6b5b"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Coffre accède à tes photos et vidéos pour les ranger dans tes dossiers."
+        }
+      ],
       "expo-video",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
-    "experiments": { "typedRoutes": true }
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }
