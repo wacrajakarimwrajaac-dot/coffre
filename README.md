@@ -8,7 +8,7 @@ Un seul endroit pour ranger, par sujet : liens (reels Instagram/Facebook, YouTub
 ## Lancer le site
 
 ```bash
-cd coffre/web
+cd web
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # vérification des types + build de production dans dist/
