@@ -1,16 +1,16 @@
-import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
 /**
- * Google sign-in through Supabase in the system browser (works in Expo Go and in builds).
- * The redirect URL (coffre://auth-callback, or exp://… in Expo Go) must be allowed in
- * Supabase → Authentication → URL Configuration → Redirect URLs.
+ * Google sign-in through Supabase in the system browser.
+ * Supabase rejects redirect URLs whose host is an IP address, so Expo Go's
+ * exp://192.168.x.x:8081/… cannot be used. We always return to coffre://auth-callback
+ * (allowed in Supabase → Authentication → URL Configuration): builds register the
+ * "coffre" scheme, and on iOS the auth session captures it even inside Expo Go.
  */
-/** Where Supabase sends the user back after Google (exp://… in Expo Go, coffre://… in builds). */
-export const googleRedirectUrl = () => Linking.createURL('auth-callback');
+export const googleRedirectUrl = () => 'coffre://auth-callback';
 
 export async function signInWithGoogle(): Promise<void> {
   const redirectTo = googleRedirectUrl();
