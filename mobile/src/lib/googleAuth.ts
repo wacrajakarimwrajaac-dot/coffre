@@ -23,11 +23,13 @@ export async function signInWithGoogle(): Promise<void> {
   const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (res.type !== 'success') return; // cancelled by the user
 
-  const { queryParams } = Linking.parse(res.url);
-  const fail = queryParams?.error_description ?? queryParams?.error;
-  if (fail) throw new Error(String(fail));
-  const code = queryParams?.code;
-  if (typeof code !== 'string') throw new Error('Réponse Google invalide');
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-  if (exchangeError) throw new Error(exchangeError.message);
+  // Tokens come back in the URL fragment (#access_token=…&refresh_token=…), or an error in the query.
+  const params = new URLSearchParams((res.url.split('#')[1] ?? '') || (res.url.split('?')[1] ?? ''));
+  const fail = params.get('error_description') ?? params.get('error');
+  if (fail) throw new Error(fail);
+  const access_token = params.get('access_token');
+  const refresh_token = params.get('refresh_token');
+  if (!access_token || !refresh_token) throw new Error('Réponse Google invalide');
+  const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+  if (sessionError) throw new Error(sessionError.message);
 }
