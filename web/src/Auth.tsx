@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { GOOGLE_CLIENT_ID } from './drive';
 import { supabase } from './supabase';
 
 /** Shows the sign-in screen until the user is logged in (cloud mode only). */
@@ -40,6 +41,11 @@ function Login() {
     if (mode === 'up' && !data.session) setMsg({ text: 'Compte créé. Confirme ton adresse via l’email reçu, puis connecte-toi.' });
   };
 
+  const google = async () => {
+    const { error } = await supabase!.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    if (error) setMsg({ text: error.message, error: true });
+  };
+
   const reset = async () => {
     if (!email) return setMsg({ text: 'Entre ton email d’abord.', error: true });
     const { error } = await supabase!.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
@@ -51,6 +57,14 @@ function Login() {
       <form className="auth-card" onSubmit={submit}>
         <div className="brand"><span className="logo">◆</span> Coffre</div>
         <p className="meta">Tous tes liens, notes, fichiers et tâches, synchronisés partout.</p>
+        {GOOGLE_CLIENT_ID && (
+          <>
+            <button type="button" className="btn-google" onClick={google}>
+              <span className="g">G</span> Continuer avec Google
+            </button>
+            <div className="or"><span>ou</span></div>
+          </>
+        )}
         <input type="email" required placeholder="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input type="password" required minLength={6} placeholder="Mot de passe"
           autoComplete={mode === 'in' ? 'current-password' : 'new-password'} value={password} onChange={(e) => setPassword(e.target.value)} />

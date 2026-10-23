@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BackupDialog, useAutoBackup } from './Backup';
 import { Card } from './Card';
 import {
   exportBackup, getAll, importBackup, importBookmarks, put, putBlob, remove, subscribe, uid,
@@ -51,6 +52,8 @@ export default function App({ email }: { email?: string }) {
       window.removeEventListener('focus', onFocus);
     };
   }, [reload, toast]);
+
+  useAutoBackup(toast);
 
   // ---- Reminders: checked while the page is open ----
   const itemsRef = useRef(items);
@@ -118,7 +121,8 @@ export default function App({ email }: { email?: string }) {
 
   const addFiles = async (files: FileList | File[], folderId = targetFolderId) => {
     if (!folderId) return;
-    for (const file of Array.from(files)) {
+    const list = Array.from(files); // the input's live FileList is cleared right after
+    for (const file of list) {
       const id = uid();
       await putBlob(id, file);
       await put('items', {
@@ -126,7 +130,7 @@ export default function App({ email }: { email?: string }) {
         mime: file.type, size: file.size, createdAt: Date.now(),
       });
     }
-    toast(`${files.length} fichier(s) ajouté(s)`);
+    toast(`${list.length} fichier(s) ajouté(s)`);
     await reload();
   };
 
@@ -474,6 +478,7 @@ function EditDialog(p: {
 function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; email?: string }) {
   const bookmarksRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
+  const [driveOpen, setDriveOpen] = useState(false);
   const [notif, setNotif] = useState(() => ('Notification' in window ? Notification.permission : 'denied'));
 
   return (
@@ -483,11 +488,12 @@ function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; ema
           🔔 Activer les notifications
         </button>
       )}
+      <button className="btn-ghost small" onClick={() => setDriveOpen(true)}>☁️ Sauvegarde Google Drive</button>
       <button className="btn-ghost small" onClick={() => bookmarksRef.current?.click()}>⭐ Importer les favoris du navigateur</button>
       <button className="btn-ghost small" onClick={async () => download(await exportBackup(), `coffre-${new Date().toISOString().slice(0, 10)}.json`)}>
-        💾 Exporter une sauvegarde
+        💾 Exporter un fichier de sauvegarde
       </button>
-      <button className="btn-ghost small" onClick={() => backupRef.current?.click()}>↩︎ Restaurer une sauvegarde</button>
+      <button className="btn-ghost small" onClick={() => backupRef.current?.click()}>↩︎ Restaurer un fichier de sauvegarde</button>
       {supabase ? (
         <>
           <p className="meta small-print">☁️ Synchronisé · {p.email}</p>
@@ -497,6 +503,7 @@ function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; ema
         <p className="meta small-print">Mode local : tes données restent dans ce navigateur. Exporte une sauvegarde régulièrement.</p>
       )}
 
+      {driveOpen && <BackupDialog onClose={() => setDriveOpen(false)} onRestored={() => void p.reload()} />}
       <input ref={bookmarksRef} type="file" accept=".html,.htm" hidden onChange={async (e) => {
         const f = e.target.files?.[0];
         e.target.value = '';

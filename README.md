@@ -25,5 +25,7 @@ npm run build    # vérification des types + build de production dans dist/
 - Tâches avec date de rappel : notification du navigateur + son, tant que la page est ouverte
 - Recherche globale et filtres par type
 - Import des favoris du navigateur (fichier HTML exporté depuis Chrome/Edge/Firefox/Safari)
-- Export / restauration d'une sauvegarde JSON (fichiers inclus)
+- Sauvegarde automatique dans Google Drive, façon WhatsApp (dossier « Coffre » visible, fichiers inclus), et restauration
+- Export / restauration d’un fichier de sauvegarde JSON (fichiers inclus)
+- Connexion « Continuer avec Google »
 - Comptes (email + mot de passe) et synchronisation en temps réel entre appareils (mode cloud)
