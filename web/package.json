@@ -1,0 +1,23 @@
+{
+  "name": "coffre-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5"
+  }
+}
