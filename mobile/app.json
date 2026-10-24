@@ -80,9 +80,7 @@
             "audio/*"
           ]
         }
-      ],
-      "expo-background-task",
-      "expo-secure-store"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

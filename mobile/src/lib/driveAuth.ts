@@ -1,12 +1,14 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 // Google Drive access for the app, using Google's "device" flow (limited-input devices):
 // the app shows a short code, the user confirms it on google.com/device with their Google account,
 // and the app receives a long-lived refresh token. It works the same in Expo Go, in builds
 // and on emulators, and needs no native Google setup.
-// Loaded lazily so a missing native module can never block app startup.
+// Stored in the app's private storage (no extra native module: keeps the app identical to the
+// known-good native build).
 const SecureStore = {
-  getItemAsync: (k: string) => (require('expo-secure-store') as typeof import('expo-secure-store')).getItemAsync(k),
-  setItemAsync: (k: string, v: string) => (require('expo-secure-store') as typeof import('expo-secure-store')).setItemAsync(k, v),
-  deleteItemAsync: (k: string) => (require('expo-secure-store') as typeof import('expo-secure-store')).deleteItemAsync(k),
+  getItemAsync: (k: string) => AsyncStorage.getItem(k),
+  setItemAsync: (k: string, v: string) => AsyncStorage.setItem(k, v),
+  deleteItemAsync: (k: string) => AsyncStorage.removeItem(k),
 };
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_DEVICE_CLIENT_ID;

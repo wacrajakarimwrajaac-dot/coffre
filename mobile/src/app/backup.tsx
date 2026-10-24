@@ -1,9 +1,8 @@
 import * as Clipboard from 'expo-clipboard';
 import { Stack } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Linking, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, Linking, ScrollView, Text, View } from 'react-native';
 import { Button, Sheet, SheetRow, s } from '@/components/ui';
-import { syncBackgroundTask } from '@/lib/backgroundBackup';
 import {
   accountEmail, backupToDrive, latestBackupDate, loadSettings, restoreFromDrive, saveSettings,
   type DriveSettings, type Frequency,
@@ -15,7 +14,11 @@ import { useStore } from '@/lib/store';
 import { C } from '@/lib/theme';
 import { formatDue } from '@/lib/util';
 
-const FREQ: Record<Frequency, string> = { off: 'Jamais (seulement quand je le demande)', daily: 'Quotidienne', weekly: 'Hebdomadaire' };
+const FREQ: Record<Frequency, string> = {
+  off: 'Jamais (seulement quand je le demande)',
+  daily: 'Quotidienne (à l’ouverture de l’app)',
+  weekly: 'Hebdomadaire (à l’ouverture de l’app)',
+};
 
 export default function Backup() {
   const st = useStore();
@@ -43,7 +46,6 @@ export default function Backup() {
   const update = async (patch: Partial<DriveSettings>) => {
     const next = await saveSettings(patch);
     setSettings(next);
-    if (patch.frequency !== undefined) await syncBackgroundTask(patch.frequency !== 'off');
   };
 
   const run = async (fn: () => Promise<string>) => {
@@ -136,15 +138,6 @@ export default function Backup() {
           <View style={[s.card, { padding: 14, gap: 4 }]}>
             <Text style={s.muted}>Sauvegarde automatique</Text>
             <Text onPress={() => setFreqSheet(true)} style={{ color: C.primary, fontSize: 16 }}>{FREQ[settings.frequency]}  ›</Text>
-          </View>
-
-          <View style={[s.card, { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: C.text, fontSize: 16 }}>Utiliser les données mobiles</Text>
-              <Text style={s.muted}>Désactivé : la sauvegarde automatique attend le Wi-Fi.</Text>
-            </View>
-            <Switch value={!!settings.cellular} onValueChange={(cellular) => update({ cellular })}
-              trackColor={{ true: C.primary, false: C.line }} />
           </View>
 
           <Text style={s.muted}>

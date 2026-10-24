@@ -18,8 +18,6 @@ export interface DriveSettings {
   email?: string;
   lastBackupAt?: number;
   lastError?: string;
-  /** Allow backups over mobile data (default: Wi-Fi only, like WhatsApp). */
-  cellular?: boolean;
 }
 const SETTINGS_KEY = 'coffre.drive.settings';
 
@@ -41,17 +39,6 @@ export function backupDue(s: DriveSettings, now = Date.now()): boolean {
   if (s.frequency === 'off' || !s.email) return false;
   const every = s.frequency === 'daily' ? 864e5 : 7 * 864e5;
   return !s.lastBackupAt || now - s.lastBackupAt >= every;
-}
-
-async function networkAllowed(s: DriveSettings): Promise<boolean> {
-  try {
-    const Network = require('expo-network') as typeof import('expo-network');
-    const n = await Network.getNetworkStateAsync();
-    if (!n.isConnected || n.isInternetReachable === false) return false;
-    return s.cellular ? true : n.type === Network.NetworkStateType.WIFI || n.type === Network.NetworkStateType.ETHERNET;
-  } catch {
-    return true;
-  }
 }
 
 // ---- Drive helpers ----
@@ -302,7 +289,7 @@ export async function restoreFromDrive(progress: Progress = () => {}): Promise<{
 export async function runScheduledBackup(): Promise<'done' | 'skipped' | 'failed'> {
   try {
     const s = await loadSettings();
-    if (!backupDue(s) || !(await hasDriveAccount()) || !(await networkAllowed(s))) return 'skipped';
+    if (!backupDue(s) || !(await hasDriveAccount())) return 'skipped';
     await backupToDrive();
     await saveSettings({ lastBackupAt: Date.now(), lastError: undefined });
     return 'done';
