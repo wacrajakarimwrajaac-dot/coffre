@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, Pressable, Text, View } from 'react-native';
+import { PRIVACY_URL } from '@/lib/appInfo';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signInWithGoogle } from '@/lib/googleAuth';
 import { supabase } from '@/lib/supabase';
 import { C } from '@/lib/theme';
+import { Logo } from './Logo';
 import { Button, Input, s } from './ui';
 
 export function Login() {
@@ -48,7 +50,7 @@ export function Login() {
     <SafeAreaView style={s.screen}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
         <View style={{ gap: 14 }}>
-          <Text style={{ color: C.text, fontSize: 32, fontWeight: '800' }}><Text style={{ color: C.primary }}>◆</Text> Coffre</Text>
+          <Logo size={44} />
           <Text style={s.muted}>Tous tes liens, notes, vocaux, fichiers et tâches, synchronisés partout.</Text>
           <Pressable onPress={google} disabled={googleBusy}
             style={{ backgroundColor: '#fff', borderRadius: 12, paddingVertical: 13, flexDirection: 'row', justifyContent: 'center', gap: 10, opacity: googleBusy ? 0.6 : 1 }}>
@@ -69,6 +71,11 @@ export function Login() {
           <Button kind="ghost" title={mode === 'in' ? 'Pas de compte ? Créer un compte' : 'Déjà un compte ? Se connecter'}
             onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setMsg(null); }} />
           {mode === 'in' && <Button kind="ghost" title="Mot de passe oublié" onPress={reset} />}
+          {PRIVACY_URL && (
+            <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>
+              En continuant, tu acceptes la <Text style={{ color: C.primary }} onPress={() => Linking.openURL(PRIVACY_URL)}>politique de confidentialité</Text>.
+            </Text>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -224,3 +224,13 @@ h1, h2, h3 { margin: 0; }
 .usage-track { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
 .usage-fill { height: 100%; background: var(--ok); }
 .usage-fill.full { background: var(--danger); }
+
+/* Brand + reports */
+.brand { display: flex; align-items: center; gap: 10px; }
+.history { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.history-row { padding: 12px; gap: 6px; }
+.history-row .note-text { margin: 4px 0 0; }
+.reply { margin: 6px 0 0; padding: 8px 10px; background: var(--panel); border-radius: 8px; font-size: 14px; }
+.status { font-size: 12px; font-weight: 700; }
+.status-in_progress { color: #f5b84b; } .status-resolved { color: var(--ok); } .status-new, .status-closed { color: var(--muted); }
+.modal .filters { margin: 0; }

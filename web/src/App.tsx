@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackupDialog, useAutoBackup } from './Backup';
 import { Card } from './Card';
 import { Recorder } from './Recorder';
+import { deleteAccount, ReportDialog } from './Report';
 import {
   INBOX, exportBackup, getAll, getUsage, importBackup, inboxId, mergeDuplicateInboxes, importBookmarks, put, putBlob, remove, subscribe, uid,
   type Folder, type Item, type ItemType, type Usage,
@@ -206,7 +207,7 @@ export default function App({ email }: { email?: string }) {
     <div className="app">
       <aside className={`sidebar${menuOpen ? ' open' : ''}`}>
         <div className="brand">
-          <span className="logo">◆</span> Coffre
+          <img src="/favicon.svg" alt="" width={28} height={28} /> Coffre
         </div>
         <nav>
           <NavRow active={view.kind === 'all' && !query} icon="🗂️" label="Tout" count={items.length}
@@ -504,6 +505,7 @@ function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; ema
   const bookmarksRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
   const [driveOpen, setDriveOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [notif, setNotif] = useState(() => ('Notification' in window ? Notification.permission : 'denied'));
 
   return (
@@ -523,12 +525,23 @@ function Tools(p: { reload: () => Promise<void>; toast: (t: string) => void; ema
       {supabase ? (
         <>
           <p className="meta small-print">☁️ Synchronisé · {p.email}</p>
+          <button className="btn-ghost small" onClick={() => setReportOpen(true)}>🐞 Signaler un problème</button>
           <button className="btn-ghost small" onClick={() => supabase!.auth.signOut()}>Se déconnecter</button>
+          <button className="btn-ghost small danger" onClick={async () => {
+            const ok = prompt('Supprimer définitivement ton compte et toutes tes données Coffre ? Les copies dans ton Google Drive restent à toi.\n\nTape SUPPRIMER pour confirmer.');
+            if (ok !== 'SUPPRIMER') return;
+            try {
+              await deleteAccount();
+            } catch (e) {
+              p.toast((e as Error).message);
+            }
+          }}>🗑️ Supprimer mon compte</button>
         </>
       ) : (
         <p className="meta small-print">Mode local : tes données restent dans ce navigateur. Exporte une sauvegarde régulièrement.</p>
       )}
 
+      {reportOpen && <ReportDialog email={p.email} onClose={() => setReportOpen(false)} />}
       {driveOpen && <BackupDialog onClose={() => setDriveOpen(false)} onRestored={() => void p.reload()} />}
       <input ref={bookmarksRef} type="file" accept=".html,.htm" hidden onChange={async (e) => {
         const f = e.target.files?.[0];

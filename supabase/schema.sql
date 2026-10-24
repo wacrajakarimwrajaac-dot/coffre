@@ -179,3 +179,91 @@ create policy "files_update_checked" on storage.objects for update to authentica
       where i.user_id = (select auth.uid()) and i.type = 'file' and i.id::text = storage.filename(name)
     )
   );
+
+-- ============================================================================
+-- Signalements (problèmes, suggestions) envoyés depuis l'app et le site
+-- Consultables par l'admin dans Supabase → Table Editor → reports
+-- ============================================================================
+
+create table if not exists public.reports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  category text not null check (category in ('bug', 'suggestion', 'account', 'other')),
+  message text not null check (char_length(message) between 3 and 5000),
+  contact_email text check (contact_email is null or char_length(contact_email) <= 320),
+  platform text check (platform is null or char_length(platform) <= 100),
+  app_version text check (app_version is null or char_length(app_version) <= 50),
+  device text check (device is null or char_length(device) <= 300),
+  screenshot_path text,
+  status text not null default 'new' check (status in ('new', 'in_progress', 'resolved', 'closed')),
+  admin_reply text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists reports_user_idx on public.reports (user_id, created_at desc);
+alter table public.reports enable row level security;
+
+drop policy if exists "reports_insert_own" on public.reports;
+create policy "reports_insert_own" on public.reports for insert to authenticated
+  with check (
+    user_id = (select auth.uid()) and status = 'new' and admin_reply is null
+    and (screenshot_path is null or screenshot_path like (select auth.uid())::text || '/%')
+  );
+
+drop policy if exists "reports_read_own" on public.reports;
+create policy "reports_read_own" on public.reports for select to authenticated
+  using (user_id = (select auth.uid()));
+-- Pas de modification ni de suppression par les utilisateurs : seul l'admin répond / change le statut.
+
+-- Anti-abus : 20 signalements maximum par 24 h et par utilisateur.
+create or replace function public.limit_reports() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if (select count(*) from public.reports r
+      where r.user_id = new.user_id and r.created_at > now() - interval '24 hours') >= 20 then
+    raise exception 'Trop de signalements aujourd’hui, réessaie demain.' using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists reports_limit on public.reports;
+create trigger reports_limit before insert on public.reports
+  for each row execute function public.limit_reports();
+
+-- Captures d'écran jointes : bucket privé, chemin "<user_id>/<fichier>", 5 Mo max.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('reports', 'reports', false, 5242880, array['image/jpeg', 'image/png', 'image/webp', 'image/heic'])
+on conflict (id) do nothing;
+
+drop policy if exists "reports_files_insert" on storage.objects;
+create policy "reports_files_insert" on storage.objects for insert to authenticated
+  with check (bucket_id = 'reports' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "reports_files_read" on storage.objects;
+create policy "reports_files_read" on storage.objects for select to authenticated
+  using (bucket_id = 'reports' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "reports_files_delete" on storage.objects;
+create policy "reports_files_delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'reports' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- ============================================================================
+-- Suppression de compte (exigée par Google Play et l'App Store)
+-- L'app supprime d'abord les fichiers via l'API Storage, puis appelle cette fonction.
+-- Dossiers, éléments, profil et signalements sont supprimés en cascade.
+-- ============================================================================
+
+create or replace function public.delete_my_account() returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'Non connecté' using errcode = 'P0001';
+  end if;
+  delete from auth.users where id = uid;
+end $$;
+
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;

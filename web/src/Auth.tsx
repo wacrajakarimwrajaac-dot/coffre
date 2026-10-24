@@ -55,7 +55,8 @@ function Login() {
   return (
     <div className="auth">
       <form className="auth-card" onSubmit={submit}>
-        <div className="brand"><span className="logo">◆</span> Coffre</div>
+        <div className="brand"><img src="/favicon.svg" alt="" width={30} height={30} /> Coffre</div>
+        <p className="meta" style={{ marginTop: -6 }}>Tout ton sujet, au même endroit.</p>
         <p className="meta">Tous tes liens, notes, fichiers et tâches, synchronisés partout.</p>
         {GOOGLE_CLIENT_ID && (
           <>

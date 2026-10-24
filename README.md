@@ -1,5 +1,9 @@
 # Coffre
 
+> Tout ton sujet, au même endroit.
+
+![Logo](brand/preview.png)
+
 Un seul endroit pour ranger, par sujet : liens (reels Instagram/Facebook, YouTube, articles), notes, documents, images, vidéos, tâches avec rappels, et favoris importés depuis le navigateur.
 
 - `web/` : site (Vite + React + TypeScript).
@@ -29,5 +33,7 @@ npm run build    # vérification des types + build de production dans dist/
 - Export / restauration d’un fichier de sauvegarde JSON (fichiers inclus)
 - Connexion « Continuer avec Google »
 - 🎤 Enregistrement vocal
+- Signalement de problèmes depuis l'app et le site (table `reports`, lisible dans Supabase → Table Editor)
+- Suppression de compte depuis l'app et le site (exigée par Google Play / App Store)
 - Formules Gratuit / Plus / Premium avec quota de stockage contrôlé côté serveur (voir [TARIFS.md](TARIFS.md))
 - Comptes (email + mot de passe) et synchronisation en temps réel entre appareils (mode cloud)

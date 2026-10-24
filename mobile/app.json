@@ -3,7 +3,7 @@
     "name": "Coffre",
     "slug": "coffre",
     "scheme": "coffre",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -80,6 +80,19 @@
             "audio/*"
           ]
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 170,
+          "resizeMode": "contain",
+          "backgroundColor": "#0b1020",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0b1020"
+          }
+        }
       ]
     ],
     "experiments": {
@@ -112,6 +125,7 @@
         "projectId": "d6a235c1-fb0a-484c-8556-d634b656c187"
       }
     },
-    "owner": "anassaoud1s-team"
+    "owner": "anassaoud1s-team",
+    "description": "Coffre — tout ton sujet, au même endroit : liens, notes, vocaux, photos, vidéos, documents et tâches avec rappels."
   }
 }
