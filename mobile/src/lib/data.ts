@@ -1,7 +1,6 @@
 // Same Supabase schema as the website (supabase/schema.sql): folders, items, private "files" bucket.
 import { File as FsFile } from 'expo-file-system';
 import { supabase } from './supabase';
-import { uid } from './util';
 
 export type ItemType = 'link' | 'note' | 'file' | 'task';
 
@@ -71,16 +70,39 @@ async function userId(): Promise<string> {
 
 const path = async (itemId: string) => `${await userId()}/${itemId}`;
 
+const INBOX = 'Boîte de réception';
+
 export async function loadAll(): Promise<{ folders: Folder[]; items: Item[] }> {
   const [f, i] = await Promise.all([supabase.from('folders').select('*'), supabase.from('items').select('*')]);
   let folders = (check(f) as Row[]).map(folderFromRow).sort((a, b) => a.createdAt - b.createdAt);
+  let items = (check(i) as Row[]).map(itemFromRow).sort((a, b) => b.createdAt - a.createdAt);
   if (folders.length === 0) {
-    const inbox: Folder = { id: uid(), name: 'Boîte de réception', parentId: null, icon: '📥', createdAt: Date.now() };
+    // The inbox id is the user id: concurrent first loads (app, website, other devices) upsert the same row.
+    const inbox: Folder = { id: await userId(), name: INBOX, parentId: null, icon: '📥', createdAt: Date.now() };
     await saveFolder(inbox);
     folders = [inbox];
+  } else if (folders.filter((x) => !x.parentId && x.name === INBOX).length > 1) {
+    ({ folders, items } = await mergeDuplicateInboxes(folders, items));
   }
-  const items = (check(i) as Row[]).map(itemFromRow).sort((a, b) => b.createdAt - a.createdAt);
   return { folders, items };
+}
+
+/** Repairs duplicate inboxes created by older versions: keeps the oldest, moves contents into it. */
+async function mergeDuplicateInboxes(folders: Folder[], items: Item[]) {
+  const inboxes = folders.filter((x) => !x.parentId && x.name === INBOX); // sorted oldest first
+  const keep = inboxes[0];
+  for (const extra of inboxes.slice(1)) {
+    check(await supabase.from('items').update({ folder_id: keep.id }).eq('folder_id', extra.id));
+    check(await supabase.from('folders').update({ parent_id: keep.id }).eq('parent_id', extra.id));
+    check(await supabase.from('folders').delete().eq('id', extra.id));
+  }
+  const removed = new Set(inboxes.slice(1).map((x) => x.id));
+  return {
+    folders: folders
+      .filter((x) => !removed.has(x.id))
+      .map((x) => (x.parentId && removed.has(x.parentId) ? { ...x, parentId: keep.id } : x)),
+    items: items.map((x) => (removed.has(x.folderId) ? { ...x, folderId: keep.id } : x)),
+  };
 }
 
 export async function saveFolder(f: Folder) {

@@ -100,6 +100,26 @@ const check = <T>({ data, error }: { data: T; error: { message: string } | null 
 
 export const uid = () => crypto.randomUUID();
 
+export const INBOX = 'Boîte de réception';
+
+/** In cloud mode the inbox id is the user id, so concurrent first loads (web, app) upsert the same row. */
+export async function inboxId(): Promise<string> {
+  return supabase ? userId() : uid();
+}
+
+/** Repairs duplicate inboxes created by older versions (cloud): keeps the oldest, moves contents into it. */
+export async function mergeDuplicateInboxes(folders: Folder[]): Promise<boolean> {
+  const inboxes = folders.filter((f) => !f.parentId && f.name === INBOX).sort((a, b) => a.createdAt - b.createdAt);
+  if (!supabase || inboxes.length < 2) return false;
+  const keep = inboxes[0];
+  for (const extra of inboxes.slice(1)) {
+    check(await supabase.from('items').update({ folder_id: keep.id }).eq('folder_id', extra.id));
+    check(await supabase.from('folders').update({ parent_id: keep.id }).eq('parent_id', extra.id));
+    check(await supabase.from('folders').delete().eq('id', extra.id));
+  }
+  return true;
+}
+
 export async function getAll<T>(table: Table): Promise<T[]> {
   if (!supabase) return run<T[]>(table, 'readonly', (s) => s.getAll());
   const rows = check(await supabase.from(table).select('*')) ?? [];

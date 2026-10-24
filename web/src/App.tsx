@@ -3,7 +3,7 @@ import { BackupDialog, useAutoBackup } from './Backup';
 import { Card } from './Card';
 import { Recorder } from './Recorder';
 import {
-  exportBackup, getAll, getUsage, importBackup, importBookmarks, put, putBlob, remove, subscribe, uid,
+  INBOX, exportBackup, getAll, getUsage, importBackup, inboxId, mergeDuplicateInboxes, importBookmarks, put, putBlob, remove, subscribe, uid,
   type Folder, type Item, type ItemType, type Usage,
 } from './db';
 import { supabase } from './supabase';
@@ -30,9 +30,11 @@ export default function App({ email }: { email?: string }) {
   const reload = useCallback(async () => {
     let fs = await getAll<Folder>('folders');
     if (fs.length === 0) {
-      const inbox: Folder = { id: uid(), name: 'Boîte de réception', parentId: null, icon: '📥', createdAt: Date.now() };
+      const inbox: Folder = { id: await inboxId(), name: INBOX, parentId: null, icon: '📥', createdAt: Date.now() };
       await put('folders', inbox);
       fs = [inbox];
+    } else if (await mergeDuplicateInboxes(fs)) {
+      fs = await getAll<Folder>('folders');
     }
     setFolders(fs.sort((a, b) => a.createdAt - b.createdAt));
     setItems((await getAll<Item>('items')).sort((a, b) => b.createdAt - a.createdAt));
