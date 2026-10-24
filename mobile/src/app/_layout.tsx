@@ -9,6 +9,7 @@ import { AutoBackup } from '@/components/AutoBackup';
 import { Login } from '@/components/Login';
 import { sendReport } from '@/lib/reports';
 import { SHARE_AVAILABLE } from '@/lib/share';
+import { HabitsProvider } from '@/lib/habitsStore';
 import { StoreProvider } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { C } from '@/lib/theme';
@@ -71,6 +72,7 @@ export default function RootLayout() {
         <Login />
       ) : (
         <StoreProvider key={session.user.id}>
+          <HabitsProvider>
           <ShareRouter />
           <AutoBackup />
           <Stack
@@ -82,11 +84,13 @@ export default function RootLayout() {
               headerBackButtonDisplayMode: 'minimal',
             }}
           >
-            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="add" options={{ presentation: 'modal', title: 'Ajouter' }} />
             <Stack.Screen name="share" options={{ presentation: 'modal', title: 'Enregistrer dans Coffre' }} />
             <Stack.Screen name="report" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="discipline/new" options={{ presentation: 'modal' }} />
           </Stack>
+          </HabitsProvider>
         </StoreProvider>
       )}
     </SafeAreaProvider>

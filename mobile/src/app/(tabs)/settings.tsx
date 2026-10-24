@@ -1,6 +1,7 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Logo } from '@/components/Logo';
 import { s } from '@/components/ui';
 import { deleteAccount } from '@/lib/account';
@@ -34,6 +35,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 
 export default function Settings() {
   const st = useStore();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState<string>('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -63,9 +65,9 @@ export default function Settings() {
     );
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={{ padding: 16, gap: 22, paddingBottom: 60 }}>
-      <Stack.Screen options={{ title: 'Réglages' }} />
-      <View style={{ alignItems: 'center', gap: 6, paddingVertical: 8 }}>
+    <ScrollView style={s.screen} contentContainerStyle={{ padding: 16, gap: 22, paddingBottom: 60, paddingTop: insets.top + 8 }}>
+      <Text style={s.h1}>Réglages</Text>
+            <View style={{ alignItems: 'center', gap: 6, paddingVertical: 8 }}>
         <Logo size={56} withName={false} />
         <Text style={{ color: C.text, fontSize: 18, fontWeight: '700' }}>{email}</Text>
         {usage && <Text style={s.muted}>Formule {PLAN_NAMES[usage.plan] ?? usage.plan}</Text>}
@@ -85,6 +87,7 @@ export default function Settings() {
       )}
 
       <Section title="Données">
+        <Row icon="📊" label="Espace de stockage" hint="Quel dossier utilise le plus d’espace" onPress={() => router.push('/storage')} />
         <Row icon="☁️" label="Sauvegarde Google Drive" hint="Copie automatique dans ton Drive" onPress={() => router.push('/backup')} />
       </Section>
 

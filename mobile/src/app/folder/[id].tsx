@@ -1,16 +1,30 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AddSheet } from '@/components/AddSheet';
-import { ItemCard } from '@/components/ItemCard';
+import { ItemRow, MediaThumb } from '@/components/ItemRow';
 import { Empty, PromptModal, Sheet, SheetRow, s } from '@/components/ui';
-import { deleteFolder, saveFolder, type ItemType } from '@/lib/data';
+import { deleteFolder, saveFolder, type Item } from '@/lib/data';
+import { kindOf, type Kind } from '@/lib/media';
 import { useStore } from '@/lib/store';
 import { C } from '@/lib/theme';
 import { uid } from '@/lib/util';
 
-const FILTERS: [ItemType | null, string][] = [[null, 'Tous'], ['link', 'Liens'], ['note', 'Notes'], ['file', 'Fichiers'], ['task', 'Tâches']];
+type Filter = 'all' | 'media' | 'link' | 'note' | 'audio' | 'doc' | 'task';
+const FILTERS: [Filter, string][] = [['all', 'Tout'], ['media', 'Photos & vidéos'], ['link', 'Liens'], ['note', 'Notes'], ['audio', 'Vocaux'], ['doc', 'Documents'], ['task', 'Tâches']];
+const SECTIONS: { kind: Kind; title: string; filter: Filter }[] = [
+  { kind: 'photo', title: 'Photos', filter: 'media' }, { kind: 'video', title: 'Vidéos', filter: 'media' },
+  { kind: 'link', title: 'Liens', filter: 'link' }, { kind: 'note', title: 'Notes', filter: 'note' },
+  { kind: 'audio', title: 'Vocaux', filter: 'audio' }, { kind: 'doc', title: 'Documents', filter: 'doc' },
+  { kind: 'task', title: 'Tâches', filter: 'task' },
+];
+const MEDIA_PREVIEW = 6; // thumbnails shown per section in the "Tout" view
+
+type Row =
+  | { k: 'header'; id: string; title: string; count: number; more?: Filter }
+  | { k: 'grid'; id: string; items: Item[] }
+  | { k: 'item'; id: string; item: Item };
 const ICONS = ['📁', '💡', '📚', '🎬', '🎵', '💼', '🏋️', '🍳', '✈️', '🏠', '💻', '🎨', '🛒', '❤️', '📥', '🔖'];
 
 export default function FolderScreen() {
@@ -18,7 +32,7 @@ export default function FolderScreen() {
   const st = useStore();
   const insets = useSafeAreaInsets();
   const folder = st.folders.find((f) => f.id === id);
-  const [filter, setFilter] = useState<ItemType | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
   const [adding, setAdding] = useState(false);
   const [menu, setMenu] = useState(false);
   const [prompt, setPrompt] = useState<'sub' | 'rename' | null>(null);
@@ -28,7 +42,29 @@ export default function FolderScreen() {
   if (!folder) return <Empty title="Dossier introuvable" />;
 
   const subs = st.childrenOf(folder.id);
-  const items = st.items.filter((i) => i.folderId === folder.id && (!filter || i.type === filter));
+  const { width } = useWindowDimensions();
+  const gap = 6;
+  const thumb = Math.floor((width - 32 - gap * 2) / 3);
+
+  const rows = useMemo<Row[]>(() => {
+    const own = st.items.filter((i) => i.folderId === folder.id);
+    const out: Row[] = [];
+    for (const sec of SECTIONS) {
+      if (filter !== 'all' && filter !== sec.filter) continue;
+      const list = own.filter((i) => kindOf(i) === sec.kind);
+      if (!list.length) continue;
+      const isMediaSection = sec.kind === 'photo' || sec.kind === 'video';
+      const limited = filter === 'all' && isMediaSection && list.length > MEDIA_PREVIEW;
+      out.push({ k: 'header', id: `h-${sec.kind}`, title: sec.title, count: list.length, more: limited ? sec.filter : undefined });
+      if (isMediaSection) {
+        const shown = limited ? list.slice(0, MEDIA_PREVIEW) : list;
+        for (let i = 0; i < shown.length; i += 3) out.push({ k: 'grid', id: `g-${sec.kind}-${i}`, items: shown.slice(i, i + 3) });
+      } else {
+        for (const item of list) out.push({ k: 'item', id: item.id, item });
+      }
+    }
+    return out;
+  }, [st.items, folder.id, filter]);
 
   const remove = () => {
     const n = st.items.filter((i) => i.folderId === folder.id).length;
@@ -49,9 +85,9 @@ export default function FolderScreen() {
         headerRight: () => <Pressable hitSlop={10} onPress={() => setMenu(true)}><Text style={{ color: C.text, fontSize: 22 }}>⋯</Text></Pressable>,
       }} />
       <FlatList
-        data={items}
-        keyExtractor={(i) => i.id}
-        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 120 }}
+        data={rows}
+        keyExtractor={(r) => r.id}
+        contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: 120 }}
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 4 }}>
             {subs.length > 0 && (
@@ -67,7 +103,7 @@ export default function FolderScreen() {
             )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
               {FILTERS.map(([t, label]) => (
-                <Pressable key={label} onPress={() => setFilter(t)}
+                <Pressable key={t} onPress={() => setFilter(t)}
                   style={{ borderWidth: 1, borderColor: filter === t ? C.primary : C.line, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6 }}>
                   <Text style={{ color: filter === t ? C.primary : C.muted }}>{label}</Text>
                 </Pressable>
@@ -82,7 +118,26 @@ export default function FolderScreen() {
           </View>
         }
         ListEmptyComponent={<Empty title="Rien ici pour l'instant" hint="Appuie sur ＋ pour ajouter un lien, une note, un vocal, une photo…" />}
-        renderItem={({ item }) => <ItemCard item={item} onChanged={st.reload} />}
+        renderItem={({ item: r }) => {
+          if (r.k === 'header') {
+            return (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                <Text style={{ color: C.text, fontSize: 16, fontWeight: '700' }}>
+                  {r.title} <Text style={{ color: C.muted, fontWeight: '400' }}>{r.count}</Text>
+                </Text>
+                {r.more && <Text onPress={() => setFilter(r.more!)} style={{ color: C.primary }}>Voir tout ›</Text>}
+              </View>
+            );
+          }
+          if (r.k === 'grid') {
+            return (
+              <View style={{ flexDirection: 'row', gap }}>
+                {r.items.map((m) => <MediaThumb key={m.id} item={m} size={thumb} />)}
+              </View>
+            );
+          }
+          return <ItemRow item={r.item} onChanged={st.reload} />;
+        }}
       />
 
       <Pressable onPress={() => setAdding(true)}

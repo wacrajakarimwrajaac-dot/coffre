@@ -2,8 +2,10 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import type { Item } from './data';
+import { challengeEnd, dayKey, type Habit } from './discipline';
 
 const CHANNEL = 'rappels';
+const HABIT_PREFIX = 'habit:';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -42,7 +44,7 @@ export async function syncReminders(items: Item[]) {
       .filter((i) => i.type === 'task' && !i.done && i.dueAt && i.dueAt > now)
       .map((i) => [i.id, i]),
   );
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  const scheduled = (await Notifications.getAllScheduledNotificationsAsync()).filter((n) => !n.identifier.startsWith(HABIT_PREFIX));
   const have = new Map(scheduled.map((n) => [n.identifier, n]));
 
   for (const n of scheduled) {
@@ -64,5 +66,40 @@ export async function syncReminders(items: Item[]) {
         delivery: 'alarmClock',
       },
     });
+  }
+}
+
+/**
+ * Re-creates the repeating reminders of habits that have a reminder time (idempotent):
+ * daily/challenge every day, weekly on the chosen weekdays, monthly on the chosen day.
+ */
+export async function syncHabitReminders(habits: Habit[]) {
+  if (Platform.OS === 'web' || !(await ensureNotifications())) return;
+  const T = Notifications.SchedulableTriggerInputTypes;
+  const today = dayKey(new Date());
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const n of scheduled) if (n.identifier.startsWith(HABIT_PREFIX)) await Notifications.cancelScheduledNotificationAsync(n.identifier);
+
+  for (const h of habits) {
+    if (!h.reminderTime || h.archivedDay) continue;
+    const end = challengeEnd(h);
+    if (end && today > end) continue;
+    const [hour, minute] = h.reminderTime.split(':').map(Number);
+    const content = { title: `${h.icon} ${h.title}`, body: 'C’est le moment de ton habitude 💪', sound: 'default' as const };
+    const base = { hour, minute, channelId: CHANNEL };
+    if (h.recurrence === 'daily' || h.recurrence === 'challenge') {
+      await Notifications.scheduleNotificationAsync({ identifier: `${HABIT_PREFIX}${h.id}`, content, trigger: { type: T.DAILY, ...base } });
+    } else if (h.recurrence === 'weekly') {
+      for (const wd of h.weekdays) {
+        // Ours: 0 = Monday … 6 = Sunday. Expo: 1 = Sunday … 7 = Saturday.
+        await Notifications.scheduleNotificationAsync({
+          identifier: `${HABIT_PREFIX}${h.id}:${wd}`, content, trigger: { type: T.WEEKLY, weekday: ((wd + 1) % 7) + 1, ...base },
+        });
+      }
+    } else if (h.recurrence === 'monthly') {
+      await Notifications.scheduleNotificationAsync({
+        identifier: `${HABIT_PREFIX}${h.id}`, content, trigger: { type: T.MONTHLY, day: Math.min(h.monthDay ?? 1, 28), ...base },
+      });
+    }
   }
 }

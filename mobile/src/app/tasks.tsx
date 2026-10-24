@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { FlatList } from 'react-native';
-import { ItemCard } from '@/components/ItemCard';
+import { ItemRow } from '@/components/ItemRow';
 import { Empty } from '@/components/ui';
 import { useStore } from '@/lib/store';
 
@@ -15,9 +15,9 @@ export default function Tasks() {
       <FlatList
         data={tasks}
         keyExtractor={(i) => i.id}
-        contentContainerStyle={{ padding: 16, gap: 10 }}
+        contentContainerStyle={{ padding: 16, gap: 8 }}
         ListEmptyComponent={<Empty title="Aucune tâche" hint="Ajoute une tâche avec un rappel depuis un dossier." />}
-        renderItem={({ item }) => <ItemCard item={item} folderLabel={st.folderPath(item.folderId)} onChanged={st.reload} />}
+        renderItem={({ item }) => <ItemRow item={item} folderLabel={st.folderPath(item.folderId)} onChanged={st.reload} />}
       />
     </>
   );

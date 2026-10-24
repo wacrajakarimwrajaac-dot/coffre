@@ -267,3 +267,74 @@ end $$;
 
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+
+-- ============================================================================
+-- Discipline : habitudes récurrentes, défis (ex. 90 jours) et suivi quotidien
+-- ============================================================================
+
+create table if not exists public.habits (
+  id uuid primary key,
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 200),
+  icon text not null default '✅',
+  -- daily : chaque jour · weekly : certains jours de la semaine · monthly : un jour du mois
+  -- challenge : chaque jour pendant duration_days à partir de start_date (ex. 90 jours)
+  recurrence text not null check (recurrence in ('daily', 'weekly', 'monthly', 'challenge')),
+  weekdays smallint[] not null default '{}',            -- 0 = lundi … 6 = dimanche (weekly)
+  month_day smallint check (month_day between 1 and 31), -- monthly (31 → dernier jour des mois courts)
+  start_date date not null,
+  duration_days integer check (duration_days between 1 and 3650),
+  reminder_time text check (reminder_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+  archived_at timestamptz,
+  created_at bigint not null
+);
+
+create table if not exists public.habit_checks (
+  habit_id uuid not null references public.habits (id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  day date not null,
+  created_at bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  primary key (habit_id, day)
+);
+
+create index if not exists habits_user_idx on public.habits (user_id);
+create index if not exists habit_checks_user_idx on public.habit_checks (user_id, day);
+
+alter table public.habits enable row level security;
+alter table public.habit_checks enable row level security;
+
+drop policy if exists "habits_own" on public.habits;
+create policy "habits_own" on public.habits for all to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
+drop policy if exists "habit_checks_own" on public.habit_checks;
+create policy "habit_checks_own" on public.habit_checks for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (
+    user_id = (select auth.uid())
+    and exists (select 1 from public.habits h where h.id = habit_id and h.user_id = (select auth.uid()))
+  );
+
+-- Anti-abus : 200 habitudes maximum par utilisateur.
+create or replace function public.limit_habits() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if (select count(*) from public.habits h where h.user_id = new.user_id) >= 200 then
+    raise exception 'Limite de 200 habitudes atteinte' using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists habits_limit on public.habits;
+create trigger habits_limit before insert on public.habits
+  for each row execute function public.limit_habits();
+
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'habits') then
+    alter publication supabase_realtime add table public.habits;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'habit_checks') then
+    alter publication supabase_realtime add table public.habit_checks;
+  end if;
+end $$;
