@@ -2,7 +2,12 @@
 // the app shows a short code, the user confirms it on google.com/device with their Google account,
 // and the app receives a long-lived refresh token. It works the same in Expo Go, in builds
 // and on emulators, and needs no native Google setup.
-import * as SecureStore from 'expo-secure-store';
+// Loaded lazily so a missing native module can never block app startup.
+const SecureStore = {
+  getItemAsync: (k: string) => (require('expo-secure-store') as typeof import('expo-secure-store')).getItemAsync(k),
+  setItemAsync: (k: string, v: string) => (require('expo-secure-store') as typeof import('expo-secure-store')).setItemAsync(k, v),
+  deleteItemAsync: (k: string) => (require('expo-secure-store') as typeof import('expo-secure-store')).deleteItemAsync(k),
+};
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_DEVICE_CLIENT_ID;
 // For "TVs and limited input devices" clients Google does not treat this secret as confidential.

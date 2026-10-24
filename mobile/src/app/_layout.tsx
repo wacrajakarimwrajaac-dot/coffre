@@ -7,11 +7,13 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AutoBackup } from '@/components/AutoBackup';
 import { Login } from '@/components/Login';
-import '@/lib/backgroundBackup';
+import { defineBackupTask } from '@/lib/backgroundBackup';
 import { SHARE_AVAILABLE } from '@/lib/share';
 import { StoreProvider } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { C } from '@/lib/theme';
+
+defineBackupTask();
 
 /** Opens the "Enregistrer dans Coffre" screen when something is shared to the app (once signed in). */
 function ShareRouter() {

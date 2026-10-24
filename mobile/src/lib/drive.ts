@@ -1,7 +1,6 @@
 // Google Drive backup, same layout and manifest as the website (a visible "Coffre" folder, real files,
 // coffre-sauvegarde.json), so a backup made on one device can be restored on the other.
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Network from 'expo-network';
 import { File as FsFile, Paths, UploadType } from 'expo-file-system';
 import { deleteFolder, fileUrl, loadAll, saveFolder, saveItem, uploadBody, type Folder, type Item } from './data';
 import { accessToken, hasDriveAccount } from './driveAuth';
@@ -46,6 +45,7 @@ export function backupDue(s: DriveSettings, now = Date.now()): boolean {
 
 async function networkAllowed(s: DriveSettings): Promise<boolean> {
   try {
+    const Network = require('expo-network') as typeof import('expo-network');
     const n = await Network.getNetworkStateAsync();
     if (!n.isConnected || n.isInternetReachable === false) return false;
     return s.cellular ? true : n.type === Network.NetworkStateType.WIFI || n.type === Network.NetworkStateType.ETHERNET;
