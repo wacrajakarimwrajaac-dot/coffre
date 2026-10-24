@@ -8,6 +8,7 @@ Expo / React Native, même base Supabase et même compte que le site.
 - Liens (Instagram, Facebook, YouTube…) : le lien copié est collé automatiquement
 - Notes, tâches avec **alarme qui sonne même app fermée** (notification locale, mode « réveil » sur Android)
 - 🎤 Vocaux, photos et vidéos (galerie ou appareil photo), documents
+- **Partager vers Coffre** : depuis Instagram, Facebook, YouTube, la galerie… « Partager → Coffre » (app installée uniquement, pas Expo Go)
 - Lecture des images, vidéos et vocaux, partage et enregistrement sur le téléphone
 - Barre d'espace utilisé selon la formule (Gratuit / Plus / Premium)
 
