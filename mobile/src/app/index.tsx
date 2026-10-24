@@ -52,6 +52,11 @@ export default function Home() {
             <Text style={{ color: C.text, fontSize: 16, flex: 1 }}>Tâches & rappels</Text>
             <Text style={s.muted}>{pending || ''}</Text>
           </Pressable>
+          <Pressable onPress={() => router.push('/backup')} style={[s.card, { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+            <Text style={{ fontSize: 22 }}>☁️</Text>
+            <Text style={{ color: C.text, fontSize: 16, flex: 1 }}>Sauvegarde Google Drive</Text>
+            <Text style={s.muted}>›</Text>
+          </Pressable>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
             <Text style={[s.muted, { textTransform: 'uppercase', letterSpacing: 1 }]}>Dossiers</Text>
             <Pressable hitSlop={10} onPress={() => setNewFolder(true)}><Text style={{ color: C.primary, fontSize: 15 }}>＋ Nouveau</Text></Pressable>

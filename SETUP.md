@@ -75,3 +75,13 @@ Supabase → **Authentication → Sign In / Providers → Google** → active-le
 - Seuls les nouveaux fichiers sont envoyés. Un élément supprimé dans Coffre part dans la corbeille du Drive (récupérable pendant 30 jours).
 - Sur le site, la sauvegarde automatique se fait quand le site est ouvert. L'app mobile pourra la faire en arrière-plan.
 - **Restaurer** (sur un nouvel appareil) : même menu → connecte le même Gmail → **Restaurer**.
+
+# Sauvegarde Google Drive dans l'app mobile
+
+L'app utilise un client OAuth Google de type **« TV et appareils à saisie limitée »** (l'app affiche un code, tu le confirmes sur google.com/device).
+1. https://console.cloud.google.com/auth/clients/create?project=coffre-512516 → type **TV et appareils à saisie limitée** → nom `Coffre Mobile`.
+2. Copie l'**ID client** et le **code secret** dans `mobile/.env` (`EXPO_PUBLIC_GOOGLE_DEVICE_CLIENT_ID` / `EXPO_PUBLIC_GOOGLE_DEVICE_CLIENT_SECRET`).
+   Pour ce type de client, Google ne considère pas le code secret comme confidentiel (il est intégré à l'app).
+3. https://console.cloud.google.com/auth/audience?project=coffre-512516 → **Publier l'application** (état « En production »).
+   Le champ `drive.file` n'est pas sensible : aucune validation Google n'est nécessaire. Sans ça, en mode « Test », l'accès expire après 7 jours.
+4. Recompiler l'app (`eas build --profile preview --platform android`).

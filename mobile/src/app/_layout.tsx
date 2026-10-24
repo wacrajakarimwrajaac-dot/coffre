@@ -5,7 +5,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AutoBackup } from '@/components/AutoBackup';
 import { Login } from '@/components/Login';
+import '@/lib/backgroundBackup';
 import { SHARE_AVAILABLE } from '@/lib/share';
 import { StoreProvider } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
@@ -42,6 +44,7 @@ export default function RootLayout() {
       ) : (
         <StoreProvider key={session.user.id}>
           <ShareRouter />
+          <AutoBackup />
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: C.bg },

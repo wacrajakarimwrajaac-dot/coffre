@@ -113,22 +113,26 @@ export async function deleteItem(i: Item) {
   check(await supabase.from('items').delete().eq('id', i.id));
 }
 
+/** Uploads the bytes of a file whose row already exists (the server checks the quota on the row). */
+export async function uploadBody(itemId: string, uri: string, mime: string) {
+  const body = await new FsFile(uri).arrayBuffer();
+  check(await supabase.storage.from('files').upload(await path(itemId), body, { contentType: mime, upsert: true }));
+}
+
 /** Creates the file row first (the server checks the quota), then uploads; rolls back on failure. */
 export async function addFile(
   folderId: string,
   file: { uri: string; name: string; mime: string; size?: number; title?: string },
   newId: string,
 ): Promise<Item> {
-  const fsFile = new FsFile(file.uri);
-  const size = file.size ?? fsFile.size ?? 0;
+  const size = file.size ?? new FsFile(file.uri).size ?? 0;
   const item: Item = {
     id: newId, folderId, type: 'file', title: file.title ?? file.name.replace(/\.[^.]+$/, ''),
     fileName: file.name, mime: file.mime, size, createdAt: Date.now(),
   };
   await saveItem(item);
   try {
-    const body = await fsFile.arrayBuffer();
-    check(await supabase.storage.from('files').upload(await path(item.id), body, { contentType: file.mime, upsert: true }));
+    await uploadBody(item.id, file.uri, file.mime);
   } catch (e) {
     await supabase.from('items').delete().eq('id', item.id);
     throw e;

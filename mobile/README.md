@@ -9,6 +9,7 @@ Expo / React Native, même base Supabase et même compte que le site.
 - Notes, tâches avec **alarme qui sonne même app fermée** (notification locale, mode « réveil » sur Android)
 - 🎤 Vocaux, photos et vidéos (galerie ou appareil photo), documents
 - **Partager vers Coffre** : depuis Instagram, Facebook, YouTube, la galerie… « Partager → Coffre » (app installée uniquement, pas Expo Go)
+- **Sauvegarde Google Drive** façon WhatsApp : dossier « Coffre » visible dans le Drive, fichiers inclus, automatique (quotidienne/hebdomadaire, Wi-Fi par défaut) + « Sauvegarder maintenant » + restauration. Même format que le site.
 - Lecture des images, vidéos et vocaux, partage et enregistrement sur le téléphone
 - Barre d'espace utilisé selon la formule (Gratuit / Plus / Premium)
 
