@@ -97,3 +97,45 @@ test('challenge progress', () => {
   assert.deepEqual(p, { total: 90, dayNo: 10, done: 2, left: 80, finished: false });
   assert.equal(D.challengeProgress(h, new Map(), '2027-01-01').finished, true);
 });
+
+test('weekly series: one entry per week, Monday start', () => {
+  const h = H({ startDate: '2026-09-01' });
+  const c = checks('h', ['2026-10-05', '2026-10-06', '2026-10-07']); // Mon Tue Wed of the current week
+  const w = D.weeklySeries(h, c, '2026-10-11', 2); // today = Sunday 11 Oct
+  assert.deepEqual(w.map((x) => x.start), ['2026-09-28', '2026-10-05']);
+  assert.deepEqual([w[0].pct, w[1].done, w[1].due], [0, 3, 6]); // Sunday 11 is today and still pending
+});
+
+test('weekday breakdown finds the days you actually do it', () => {
+  const h = H({ startDate: '2026-10-05' }); // Monday
+  const c = checks('h', ['2026-10-05', '2026-10-12', '2026-10-07']); // Mon, Mon, Wed
+  const b = D.weekdayBreakdown(h, c, '2026-10-05', '2026-10-18');
+  assert.deepEqual([b[0].done, b[0].due, b[0].pct], [2, 2, 100]);
+  assert.deepEqual([b[2].done, b[2].due, b[2].pct], [1, 2, 50]);
+  assert.equal(b[6].due, 1); // Sunday 18 is today and counted only once done: not yet -> excluded
+});
+
+test('habit monthly clips the current month to today', () => {
+  const h = H({ startDate: '2026-09-01' });
+  const days = []; for (let d = 1; d <= 30; d++) days.push(`2026-09-${String(d).padStart(2, '0')}`);
+  const m = D.habitMonthly(h, checks('h', days), '2026-10-10', 3);
+  assert.deepEqual(m.map((x) => x.key), ['2026-08', '2026-09', '2026-10']);
+  assert.deepEqual([m[0].pct, m[1].pct], [null, 100]);
+  assert.equal(m[2].due, 9); // 1..9 Oct, today (10) pending
+});
+
+test('day state for the calendar', () => {
+  const h = H({ recurrence: 'weekly', weekdays: [0], startDate: '2026-10-01' });
+  const c = checks('h', ['2026-10-05']);
+  assert.equal(D.dayState(h, c, '2026-10-05', '2026-10-13'), 'done');
+  assert.equal(D.dayState(h, c, '2026-10-12', '2026-10-13'), 'missed');
+  assert.equal(D.dayState(h, c, '2026-10-13', '2026-10-13'), 'off');
+  assert.equal(D.dayState(h, c, '2026-10-19', '2026-10-13'), 'future');
+});
+
+test('habit summary', () => {
+  const h = H({ startDate: '2026-10-01' });
+  const s = D.habitSummary(h, checks('h', ['2026-10-01', '2026-10-02', '2026-10-03']), '2026-10-01', '2026-10-07');
+  assert.deepEqual([s.totalDone, s.rate.done, s.rate.due, s.rate.pct, s.best], [3, 3, 6, 50, 3]);
+  assert.equal(s.perWeek, 3);
+});

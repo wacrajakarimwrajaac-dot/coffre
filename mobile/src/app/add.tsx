@@ -10,7 +10,7 @@ import { useStore } from '@/lib/store';
 import { C } from '@/lib/theme';
 import { hostOf, normalizeUrl, uid } from '@/lib/util';
 
-const TITLES: Record<string, string> = { link: '🔗 Lien', note: '📝 Note', task: '⏰ Tâche', voice: '🎤 Vocal' };
+const TITLES: Record<string, string> = { link: 'Nouveau lien', note: 'Nouvelle note', task: 'Nouvelle tâche', voice: 'Nouveau vocal' };
 
 export default function Add() {
   const { type = 'link', folder } = useLocalSearchParams<{ type?: string; folder: string }>();

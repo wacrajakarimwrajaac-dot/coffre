@@ -41,12 +41,12 @@ export function folderUsage(folders: Folder[], items: Item[]): FolderUsage[] {
   return [...acc.values()].sort((a, b) => b.bytes - a.bytes || a.folder.name.localeCompare(b.folder.name));
 }
 
-export interface TypeUsage { kind: Kind; label: string; icon: string; bytes: number; files: number }
+export interface TypeUsage { kind: Kind; label: string; bytes: number; files: number }
 
 export function typeUsage(items: Item[]): TypeUsage[] {
-  const defs: [Kind, string, string][] = [['photo', 'Photos', '🖼️'], ['video', 'Vidéos', '🎬'], ['audio', 'Vocaux', '🎤'], ['doc', 'Documents', '📄']];
-  return defs.map(([kind, label, icon]) => {
+  const defs: [Kind, string][] = [['photo', 'Photos'], ['video', 'Vidéos'], ['audio', 'Vocaux'], ['doc', 'Documents']];
+  return defs.map(([kind, label]) => {
     const list = items.filter((i) => kindOf(i) === kind);
-    return { kind, label, icon, bytes: list.reduce((n, i) => n + (i.size ?? 0), 0), files: list.length };
+    return { kind, label, bytes: list.reduce((n, i) => n + (i.size ?? 0), 0), files: list.length };
   });
 }

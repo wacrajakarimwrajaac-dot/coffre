@@ -1,9 +1,13 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Icon } from '@/components/Icon';
+import type { IconName } from '@/lib/icons';
 import { C } from '@/lib/theme';
 
-const icon = (emoji: string) => ({ focused }: { focused: boolean }) => (
-  <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.55 }}>{emoji}</Text>
+const tab = (name: IconName) => ({ color, focused }: { color: any; focused: boolean }) => (
+  <View style={{ alignItems: 'center' }}>
+    <Icon name={name} size={23} color={color} strokeWidth={focused ? 2.2 : 1.7} />
+  </View>
 );
 
 export default function TabsLayout() {
@@ -12,16 +16,16 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         sceneStyle: { backgroundColor: C.bg },
-        tabBarStyle: { backgroundColor: C.panel, borderTopColor: C.line },
-        tabBarActiveTintColor: C.primary,
+        tabBarStyle: { backgroundColor: C.bg, borderTopColor: C.line, borderTopWidth: StyleSheet.hairlineWidth, elevation: 0 },
+        tabBarActiveTintColor: C.text,
         tabBarInactiveTintColor: C.muted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600' },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Accueil', tabBarIcon: icon('🏠') }} />
-      <Tabs.Screen name="media" options={{ title: 'Médias', tabBarIcon: icon('🖼️') }} />
-      <Tabs.Screen name="discipline" options={{ title: 'Discipline', tabBarIcon: icon('🔥') }} />
-      <Tabs.Screen name="settings" options={{ title: 'Réglages', tabBarIcon: icon('⚙️') }} />
+      <Tabs.Screen name="index" options={{ title: 'Accueil', tabBarIcon: tab('house') }} />
+      <Tabs.Screen name="media" options={{ title: 'Médias', tabBarIcon: tab('images') }} />
+      <Tabs.Screen name="discipline" options={{ title: 'Discipline', tabBarIcon: tab('flame') }} />
+      <Tabs.Screen name="settings" options={{ title: 'Réglages', tabBarIcon: tab('sliders-horizontal') }} />
     </Tabs>
   );
 }

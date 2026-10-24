@@ -249,3 +249,71 @@ export function describe(h: Habit): string {
     case 'challenge': return `Défi de ${h.durationDays ?? 90} jours`;
   }
 }
+
+// ---- Per-habit statistics ----
+
+export interface WeekStat extends Rate { start: string }
+
+/** Completion of one habit for each of the last `weeks` weeks (Monday start), oldest first. */
+export function weeklySeries(h: Habit, checks: Checks, today: string, weeks: number): WeekStat[] {
+  const monday = addDays(today, -weekdayOf(today));
+  return Array.from({ length: weeks }, (_, i) => {
+    const start = addDays(monday, -(weeks - 1 - i) * 7);
+    return { start, ...rateOf(h, checks, start, addDays(start, 6), today) };
+  });
+}
+
+export interface WeekdayStat extends Rate { weekday: number }
+
+/** How often the habit is done on each weekday (Monday = 0), over [from, today]. */
+export function weekdayBreakdown(h: Habit, checks: Checks, from: string, today: string): WeekdayStat[] {
+  const out: WeekdayStat[] = Array.from({ length: 7 }, (_, weekday) => ({ weekday, done: 0, due: 0, pct: null }));
+  const done = checks.get(h.id);
+  for (const k of dueDays(h, from, today)) {
+    const ok = !!done?.has(k);
+    if (k === today && !ok) continue;
+    const w = out[weekdayOf(k)];
+    w.due++;
+    if (ok) w.done++;
+  }
+  return out.map((w) => ({ ...w, pct: w.due ? Math.round((w.done / w.due) * 100) : null }));
+}
+
+export interface HabitMonth extends Rate { key: string; label: string }
+
+/** Completion of one habit for each of the last `count` months, oldest first. */
+export function habitMonthly(h: Habit, checks: Checks, today: string, count: number): HabitMonth[] {
+  const [ty, tm] = today.split('-').map(Number);
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(ty, tm - 1 - (count - 1 - i), 1);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const from = `${y}-${pad(m)}-01`;
+    const to = `${y}-${pad(m)}-${pad(daysInMonth(y, m))}`;
+    return { key: `${y}-${pad(m)}`, label: MONTHS[m - 1], ...rateOf(h, checks, from, to < today ? to : today, today) };
+  });
+}
+
+export type DayState = 'done' | 'missed' | 'pending' | 'off' | 'future';
+
+/** State of one calendar day for a habit. */
+export function dayState(h: Habit, checks: Checks, key: string, today: string): DayState {
+  if (isDone(checks, h.id, key)) return 'done';
+  if (key > today) return 'future';
+  if (!isDue(h, key)) return 'off';
+  return key === today ? 'pending' : 'missed';
+}
+
+export interface HabitSummary { rate: Rate; streak: number; best: number; totalDone: number; perWeek: number | null }
+
+/** Everything shown on a habit's statistics page for one period. */
+export function habitSummary(h: Habit, checks: Checks, from: string, today: string): HabitSummary {
+  const rate = rateOf(h, checks, from, today, today);
+  const start = from < h.startDate ? h.startDate : from;
+  const weeks = Math.max((daysBetween(start, today) + 1) / 7, 1);
+  const done = [...(checks.get(h.id) ?? [])].filter((k) => k >= from && k <= today).length;
+  return {
+    rate, streak: currentStreak(h, checks, today), best: bestStreak(h, checks, today),
+    totalDone: done, perWeek: done ? Math.round((done / weeks) * 10) / 10 : 0,
+  };
+}

@@ -109,7 +109,7 @@ export default function Backup() {
     ]);
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={{ padding: 16, gap: 14 }}>
+    <ScrollView style={s.screen} contentContainerStyle={{ padding: 20, gap: 14, paddingBottom: 50 }}>
       <Stack.Screen options={{ title: 'Sauvegarde Google Drive' }} />
       <Text style={s.muted}>
         Comme WhatsApp : tes dossiers, notes, liens, tâches et fichiers (photos, vidéos, vocaux, documents) sont copiés dans un
@@ -121,7 +121,7 @@ export default function Backup() {
       ) : code ? (
         <View style={[s.card, { padding: 18, gap: 12, alignItems: 'center' }]}>
           <Text style={s.muted}>Sur la page Google qui vient de s’ouvrir, entre ce code puis choisis ton compte :</Text>
-          <Text selectable style={{ color: C.text, fontSize: 34, fontWeight: '800', letterSpacing: 3 }}>{code.userCode}</Text>
+          <Text selectable style={{ color: C.text, fontSize: 34, fontWeight: '700', letterSpacing: 4 }}>{code.userCode}</Text>
           <Text style={s.muted}>Le code est copié. En attente de ta confirmation…</Text>
           <Button kind="ghost" title="Rouvrir la page Google" onPress={() => Linking.openURL(`${code.verificationUrl}?user_code=${encodeURIComponent(code.userCode)}`)} />
           <Button kind="ghost" title="Annuler" onPress={() => { cancelled.current = true; setCode(null); }} />
@@ -151,11 +151,11 @@ export default function Backup() {
         </>
       )}
 
-      {status && <Text style={{ color: status.error ? C.danger : C.muted }}>{busy ? '⏳ ' : ''}{status.text}</Text>}
+      {status && <Text style={{ color: status.error ? C.danger : C.muted }}>{status.text}</Text>}
 
       <Sheet visible={freqSheet} onClose={() => setFreqSheet(false)}>
         {(Object.keys(FREQ) as Frequency[]).map((f) => (
-          <SheetRow key={f} icon={settings.frequency === f ? '✅' : '○'} label={FREQ[f]}
+          <SheetRow key={f} selected={settings.frequency === f} label={FREQ[f]}
             onPress={() => { setFreqSheet(false); update({ frequency: f }); }} />
         ))}
       </Sheet>

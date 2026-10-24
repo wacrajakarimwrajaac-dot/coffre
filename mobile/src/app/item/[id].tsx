@@ -7,6 +7,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { DuePicker } from '@/components/DuePicker';
+import { Icon, parseIcon } from '@/components/Icon';
 import { Button, Chip, Empty, Input, Sheet, SheetRow, s } from '@/components/ui';
 import { deleteItem, fileUrl, saveItem, type Item } from '@/lib/data';
 import { useStore } from '@/lib/store';
@@ -116,8 +117,9 @@ export default function ItemScreen() {
         )}
         <View>
           <Text style={s.label}>Dossier</Text>
-          <Pressable onPress={() => setMoving(true)} style={s.input}>
-            <Text style={{ color: C.text, fontSize: 16 }}>{st.folderPath(it.folderId)}</Text>
+          <Pressable onPress={() => setMoving(true)} style={[s.input, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+            <Text style={{ flex: 1, color: C.text, fontSize: 16 }}>{st.folderPath(it.folderId)}</Text>
+            <Icon name="chevron-down" size={18} color={C.muted} />
           </Pressable>
         </View>
 
@@ -126,13 +128,11 @@ export default function ItemScreen() {
         <Button kind="danger" title="Supprimer" onPress={remove} />
       </ScrollView>
 
-      <Sheet visible={moving} onClose={() => setMoving(false)}>
-        <ScrollView style={{ maxHeight: 420 }}>
-          {st.folders.map((f) => (
-            <SheetRow key={f.id} icon={f.id === it.folderId ? '✅' : f.icon} label={st.folderPath(f.id)}
-              onPress={() => { set({ folderId: f.id }); setMoving(false); }} />
-          ))}
-        </ScrollView>
+      <Sheet visible={moving} onClose={() => setMoving(false)} title="Déplacer vers">
+        {st.folders.map((f) => (
+          <SheetRow key={f.id} icon={parseIcon(f.icon).name} selected={f.id === it.folderId} label={st.folderPath(f.id)}
+            onPress={() => { set({ folderId: f.id }); setMoving(false); }} />
+        ))}
       </Sheet>
     </KeyboardAvoidingView>
   );
@@ -151,7 +151,7 @@ function AudioBox({ uri }: { uri: string }) {
     <View style={[s.card, { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 14 }]}>
       <Pressable onPress={() => (st.playing ? player.pause() : (st.didJustFinish || st.currentTime >= st.duration ? (player.seekTo(0), player.play()) : player.play()))}
         style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: C.primaryInk, fontSize: 20 }}>{st.playing ? '❚❚' : '▶'}</Text>
+        <Icon name={st.playing ? 'pause' : 'play'} size={22} color={C.primaryInk} />
       </Pressable>
       <View style={{ flex: 1, gap: 6 }}>
         <View style={{ height: 4, backgroundColor: C.line, borderRadius: 2 }}>

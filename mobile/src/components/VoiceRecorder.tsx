@@ -5,6 +5,7 @@ import {
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { C } from '@/lib/theme';
+import { Icon } from './Icon';
 import { Button, Input, s } from './ui';
 
 const fmt = (ms: number) => {
@@ -49,7 +50,7 @@ export function VoiceRecorder({ onSave, busy }: { onSave: (uri: string, name: st
         <View style={[s.card, { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 }]}>
           <Pressable onPress={() => (playing ? player.pause() : (player.seekTo(0), player.play()))}
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: C.primaryInk, fontSize: 18 }}>{playing ? '❚❚' : '▶'}</Text>
+            <Icon name={playing ? 'pause' : 'play'} size={20} color={C.primaryInk} />
           </Pressable>
           <Text style={{ color: C.text }}>{fmt(duration)}</Text>
         </View>
@@ -67,7 +68,7 @@ export function VoiceRecorder({ onSave, busy }: { onSave: (uri: string, name: st
       <Pressable onPress={state.isRecording ? stop : start}
         style={{ width: 110, height: 110, borderRadius: 55, alignItems: 'center', justifyContent: 'center',
           backgroundColor: state.isRecording ? C.danger : C.primary }}>
-        <Text style={{ fontSize: 40 }}>{state.isRecording ? '■' : '🎤'}</Text>
+        <Icon name={state.isRecording ? 'square' : 'mic'} size={state.isRecording ? 34 : 42} color={C.primaryInk} strokeWidth={state.isRecording ? 2.4 : 1.7} />
       </Pressable>
       <Text style={{ color: C.text, fontSize: 22, fontVariant: ['tabular-nums'] }}>{fmt(state.durationMillis)}</Text>
       <Text style={s.muted}>{state.isRecording ? 'Appuie pour arrêter' : 'Appuie pour enregistrer'}</Text>

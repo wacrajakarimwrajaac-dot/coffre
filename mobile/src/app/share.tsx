@@ -114,7 +114,7 @@ export default function Share() {
         <View>
           <Text style={s.label}>Enregistrer dans</Text>
           <Pressable onPress={() => setPicking((p) => !p)} style={s.input}>
-            <Text style={{ color: C.text, fontSize: 16 }}>{folderId ? `📁 ${st.folderPath(folderId)}` : 'Choisir un dossier'}</Text>
+            <Text style={{ color: C.text, fontSize: 16 }}>{folderId ? st.folderPath(folderId) : 'Choisir un dossier'}</Text>
           </Pressable>
           {picking && (
             <View style={[s.card, { marginTop: 8 }]}>

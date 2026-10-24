@@ -41,7 +41,7 @@ const str = (x: unknown) => (x === null || x === undefined ? undefined : String(
 
 const folderFromRow = (r: Row): Folder => ({
   id: String(r.id), name: String(r.name), parentId: (r.parent_id as string | null) ?? null,
-  icon: String(r.icon ?? '📁'), createdAt: Number(r.created_at),
+  icon: String(r.icon ?? 'folder:violet'), createdAt: Number(r.created_at),
 });
 
 const itemFromRow = (r: Row): Item => ({
@@ -78,7 +78,7 @@ export async function loadAll(): Promise<{ folders: Folder[]; items: Item[] }> {
   let items = (check(i) as Row[]).map(itemFromRow).sort((a, b) => b.createdAt - a.createdAt);
   if (folders.length === 0) {
     // The inbox id is the user id: concurrent first loads (app, website, other devices) upsert the same row.
-    const inbox: Folder = { id: await userId(), name: INBOX, parentId: null, icon: '📥', createdAt: Date.now() };
+    const inbox: Folder = { id: await userId(), name: INBOX, parentId: null, icon: 'inbox:violet', createdAt: Date.now() };
     await saveFolder(inbox);
     folders = [inbox];
   } else if (folders.filter((x) => !x.parentId && x.name === INBOX).length > 1) {

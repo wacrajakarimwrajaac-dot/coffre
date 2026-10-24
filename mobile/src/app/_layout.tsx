@@ -13,6 +13,7 @@ import { HabitsProvider } from '@/lib/habitsStore';
 import { StoreProvider } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { C } from '@/lib/theme';
+import { ThemeProvider, useTheme } from '@/lib/themeProvider';
 
 /** Shown instead of a blank screen if something crashes: retry, or send the error to us in one tap. */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
@@ -35,7 +36,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       </Pressable>
       <Pressable onPress={report} disabled={sent !== 'idle' && sent !== 'failed'} style={{ padding: 14, alignItems: 'center' }}>
         <Text style={{ color: C.text }}>
-          {sent === 'sent' ? '✅ Signalement envoyé, merci' : sent === 'sending' ? 'Envoi…' : sent === 'failed' ? 'Échec, réessayer l’envoi' : '🐞 Signaler ce problème'}
+          {sent === 'sent' ? 'Signalement envoyé, merci' : sent === 'sending' ? 'Envoi…' : sent === 'failed' ? 'Échec, réessayer l’envoi' : 'Signaler ce problème'}
         </Text>
       </Pressable>
     </View>
@@ -52,6 +53,15 @@ function ShareRouter() {
 }
 
 export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
+  );
+}
+
+function App() {
+  const { scheme } = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
@@ -63,7 +73,7 @@ export default function RootLayout() {
   return (
     <ShareIntentProvider options={{ disabled: !SHARE_AVAILABLE, resetOnBackground: false }}>
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
       {session === undefined ? (
         <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator color={C.primary} />
@@ -79,6 +89,7 @@ export default function RootLayout() {
             screenOptions={{
               headerStyle: { backgroundColor: C.bg },
               headerTintColor: C.text,
+              headerTitleStyle: { fontSize: 16, fontWeight: '600' },
               headerShadowVisible: false,
               contentStyle: { backgroundColor: C.bg },
               headerBackButtonDisplayMode: 'minimal',

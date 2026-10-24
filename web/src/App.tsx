@@ -14,6 +14,8 @@ type View = { kind: 'all' } | { kind: 'tasks' } | { kind: 'folder'; id: string }
 type Mode = 'link' | 'note' | 'task' | 'voice' | 'file';
 
 const TYPE_LABELS: Record<ItemType, string> = { link: 'Liens', note: 'Notes', file: 'Fichiers', task: 'Tâches' };
+// Folders made in the mobile app use icons like "plane:blue"; the website shows a plain folder for those.
+const glyph = (i: string) => (/^[a-z0-9-]+:[a-z]+$/.test(i) ? '📁' : i);
 const ICONS = ['📁', '💡', '📚', '🎬', '🎵', '💼', '🏋️', '🍳', '✈️', '🏠', '💻', '🎨', '🛒', '❤️'];
 
 export default function App({ email }: { email?: string }) {
@@ -200,7 +202,7 @@ export default function App({ email }: { email?: string }) {
   const title =
     query.trim() ? `Résultats pour « ${query.trim()} »`
     : view.kind === 'tasks' ? 'Tâches & rappels'
-    : currentFolder ? `${currentFolder.icon} ${currentFolder.name}`
+    : currentFolder ? `${glyph(currentFolder.icon)} ${currentFolder.name}`
     : 'Tout';
 
   return (
@@ -267,7 +269,7 @@ export default function App({ email }: { email?: string }) {
           <div className="subfolders">
             {childrenOf(currentFolder.id).map((f) => (
               <button key={f.id} className="subfolder" onClick={() => setView({ kind: 'folder', id: f.id })}>
-                <span>{f.icon}</span> {f.name} <span className="meta">{countIn(f.id)}</span>
+                <span>{glyph(f.icon)}</span> {f.name} <span className="meta">{countIn(f.id)}</span>
               </button>
             ))}
           </div>
@@ -345,7 +347,7 @@ function FolderTree(p: {
         <div key={f.id}>
           <button className={`nav-row${p.activeId === f.id ? ' active' : ''}`} style={{ paddingLeft: 12 + p.depth * 16 }}
             onClick={() => p.onSelect(f.id)}>
-            <span>{f.icon}</span><span className="grow">{f.name}</span><span className="meta">{p.countIn(f.id) || ''}</span>
+            <span>{glyph(f.icon)}</span><span className="grow">{f.name}</span><span className="meta">{p.countIn(f.id) || ''}</span>
           </button>
           <FolderTree {...p} parentId={f.id} depth={p.depth + 1} />
         </div>
@@ -357,7 +359,7 @@ function FolderTree(p: {
 function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <select className="icon-select" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Icône">
-      {[...new Set([value, ...ICONS])].map((i) => <option key={i} value={i}>{i}</option>)}
+      {[...new Set([value, ...ICONS])].map((i) => <option key={i} value={i}>{glyph(i)}</option>)}
     </select>
   );
 }

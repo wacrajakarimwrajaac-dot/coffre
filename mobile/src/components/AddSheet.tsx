@@ -64,13 +64,13 @@ export function AddSheet(p: {
 
   return (
     <Sheet visible={p.visible} onClose={p.onClose}>
-      <SheetRow icon="🔗" label="Lien (Instagram, Facebook, YouTube…)" onPress={() => go('link')} />
-      <SheetRow icon="📝" label="Note" onPress={() => go('note')} />
-      <SheetRow icon="⏰" label="Tâche avec rappel" onPress={() => go('task')} />
-      <SheetRow icon="🎤" label="Vocal" onPress={() => go('voice')} />
-      <SheetRow icon="🖼️" label="Photos et vidéos" onPress={() => fromLibrary(false)} />
-      <SheetRow icon="📷" label="Prendre une photo ou vidéo" onPress={() => fromLibrary(true)} />
-      <SheetRow icon="📄" label="Document" onPress={fromFiles} />
+      <SheetRow icon="link" label="Lien (Instagram, Facebook, YouTube…)" onPress={() => go('link')} />
+      <SheetRow icon="file-text" label="Note" onPress={() => go('note')} />
+      <SheetRow icon="alarm-clock" label="Tâche avec rappel" onPress={() => go('task')} />
+      <SheetRow icon="mic" label="Vocal" onPress={() => go('voice')} />
+      <SheetRow icon="images" label="Photos et vidéos" onPress={() => fromLibrary(false)} />
+      <SheetRow icon="camera" label="Prendre une photo ou vidéo" onPress={() => fromLibrary(true)} />
+      <SheetRow icon="file" label="Document" onPress={fromFiles} />
     </Sheet>
   );
 }

@@ -58,7 +58,7 @@ export async function syncReminders(items: Item[]) {
     if (have.has(task.id)) continue;
     await Notifications.scheduleNotificationAsync({
       identifier: task.id,
-      content: { title: '⏰ Rappel', body: task.title, sound: 'default', data: { dueAt: task.dueAt, itemId: task.id } },
+      content: { title: 'Rappel', body: task.title, sound: 'default', data: { dueAt: task.dueAt, itemId: task.id } },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: task.dueAt!,
@@ -85,7 +85,7 @@ export async function syncHabitReminders(habits: Habit[]) {
     const end = challengeEnd(h);
     if (end && today > end) continue;
     const [hour, minute] = h.reminderTime.split(':').map(Number);
-    const content = { title: `${h.icon} ${h.title}`, body: 'C’est le moment de ton habitude 💪', sound: 'default' as const };
+    const content = { title: h.title, body: 'C’est le moment de ton habitude', sound: 'default' as const };
     const base = { hour, minute, channelId: CHANNEL };
     if (h.recurrence === 'daily' || h.recurrence === 'challenge') {
       await Notifications.scheduleNotificationAsync({ identifier: `${HABIT_PREFIX}${h.id}`, content, trigger: { type: T.DAILY, ...base } });

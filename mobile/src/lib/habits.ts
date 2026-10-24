@@ -4,7 +4,7 @@ import { buildChecks, dayKey, type Checks, type Habit, type Recurrence } from '.
 type Row = Record<string, any>;
 
 const fromRow = (r: Row): Habit => ({
-  id: r.id, title: r.title, icon: r.icon ?? '✅', recurrence: r.recurrence as Recurrence,
+  id: r.id, title: r.title, icon: r.icon ?? 'target:green', recurrence: r.recurrence as Recurrence,
   weekdays: (r.weekdays ?? []).map(Number), monthDay: r.month_day ?? null, startDate: r.start_date,
   durationDays: r.duration_days ?? null, reminderTime: r.reminder_time ?? null,
   archivedDay: r.archived_at ? dayKey(new Date(r.archived_at)) : null, createdAt: Number(r.created_at),

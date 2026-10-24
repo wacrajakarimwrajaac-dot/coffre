@@ -2,6 +2,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { C } from '@/lib/theme';
+import { Icon } from './Icon';
 import { Button, s } from './ui';
 
 const toDate = (hhmm: string) => {
@@ -27,13 +28,14 @@ export function TimePicker({ value, onChange }: { value: string | null; onChange
 
   return (
     <View style={{ gap: 8 }}>
-      <Pressable onPress={pick} style={[s.input, { flexDirection: 'row', justifyContent: 'space-between' }]}>
-        <Text style={{ color: value ? C.text : C.muted, fontSize: 16 }}>{value ? `🔔 Rappel à ${value}` : 'Ajouter un rappel'}</Text>
-        {value ? <Text onPress={() => onChange(null)} style={{ color: C.muted }}>✕</Text> : null}
+      <Pressable onPress={pick} style={[s.input, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+        <Icon name="bell" size={18} color={value ? C.primary : C.muted} />
+        <Text style={{ flex: 1, color: value ? C.text : C.muted, fontSize: 16 }}>{value ? `Rappel à ${value}` : 'Ajouter un rappel'}</Text>
+        {value ? <Pressable hitSlop={10} onPress={() => onChange(null)}><Icon name="x" size={18} color={C.muted} /></Pressable> : null}
       </Pressable>
       {iosOpen && Platform.OS === 'ios' && (
         <>
-          <DateTimePicker value={base} mode="time" display="spinner" themeVariant="dark" onChange={(_, d) => d && onChange(toHHMM(d))} />
+          <DateTimePicker value={base} mode="time" display="spinner" themeVariant={C.bg === '#FFFFFF' ? 'light' : 'dark'} onChange={(_, d) => d && onChange(toHHMM(d))} />
           <Button kind="ghost" title="OK" onPress={() => setIosOpen(false)} />
         </>
       )}
