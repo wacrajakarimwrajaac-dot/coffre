@@ -51,7 +51,7 @@ export function Login() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
         <View style={{ gap: 14 }}>
           <Logo size={44} />
-          <Text style={s.muted}>Tous tes liens, notes, vocaux, fichiers et tâches, synchronisés partout.</Text>
+          <Text style={s.muted}>Tes liens, notes, vocaux et fichiers, rangés sur ton téléphone et sauvegardés sur ton Drive.</Text>
           <Pressable onPress={google} disabled={googleBusy}
             style={{ backgroundColor: '#fff', borderRadius: 12, paddingVertical: 13, flexDirection: 'row', justifyContent: 'center', gap: 10, opacity: googleBusy ? 0.6 : 1 }}>
             <Text style={{ color: '#4285f4', fontWeight: '900', fontSize: 16 }}>G</Text>

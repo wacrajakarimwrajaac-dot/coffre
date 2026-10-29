@@ -68,7 +68,7 @@ export function Pill({ label, icon, on, onPress }: { label: string; icon?: IconN
   );
 }
 
-/** Underlined tabs (Aujourd'hui / Habitudes / Statistiques). */
+/** Underlined tabs (e.g. Tout / Photos / Vidéos). */
 export function Tabs<T extends string>({ items, value, onChange }: { items: [T, string][]; value: T; onChange: (v: T) => void }) {
   return (
     <View style={{ flexDirection: 'row', gap: 22, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line }}>

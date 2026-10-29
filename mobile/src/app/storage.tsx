@@ -2,6 +2,7 @@ import { router, Stack } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Icon, IconTile } from '@/components/Icon';
+import { StorageBar } from '@/components/StorageBar';
 import { SectionLabel, s } from '@/components/ui';
 import type { IconName } from '@/lib/icons';
 import { folderUsage, typeUsage } from '@/lib/media';
@@ -9,7 +10,6 @@ import { useStore } from '@/lib/store';
 import { C } from '@/lib/theme';
 import { formatSize } from '@/lib/util';
 
-const PLAN_NAMES: Record<string, string> = { free: 'Gratuit', plus: 'Plus', premium: 'Premium' };
 const TYPE_ICON: Record<string, IconName> = { photo: 'image', video: 'video', audio: 'mic', doc: 'file' };
 
 function Bar({ pct, color = C.primary }: { pct: number; color?: string }) {
@@ -26,7 +26,6 @@ export default function Storage() {
   const folders = useMemo(() => folderUsage(st.folders, st.items), [st.folders, st.items]);
   const types = useMemo(() => typeUsage(st.items), [st.items]);
   const total = folders.reduce((n, f) => n + f.bytes, 0);
-  const pct = usage ? (usage.usedBytes / usage.quotaBytes) * 100 : 0;
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 50 }}>
@@ -35,9 +34,9 @@ export default function Storage() {
       {usage && (
         <View style={{ gap: 8, marginTop: 6 }}>
           <Text style={{ color: C.text, fontSize: 38, fontWeight: '700', letterSpacing: -1.2 }}>{formatSize(usage.usedBytes)}</Text>
-          <Text style={s.muted}>utilisés sur {formatSize(usage.quotaBytes)} · formule {PLAN_NAMES[usage.plan] ?? usage.plan}</Text>
-          <View style={{ marginTop: 4 }}><Bar pct={pct} color={pct > 90 ? C.danger : C.primary} /></View>
-          <Text style={s.muted}>Il te reste {formatSize(Math.max(usage.quotaBytes - usage.usedBytes, 0))} · fichier max {formatSize(usage.maxFileBytes)}</Text>
+          <Text style={s.muted}>utilisés par Coffre sur ce téléphone</Text>
+          <View style={{ marginTop: 4 }}><StorageBar usage={usage} /></View>
+          {usage.totalBytes > 0 && <Text style={s.muted}>Il reste {formatSize(usage.freeBytes)} libres sur le téléphone ({formatSize(usage.totalBytes)} au total)</Text>}
         </View>
       )}
 
@@ -74,7 +73,7 @@ export default function Storage() {
       {!folders.length && <Text style={s.muted}>Aucun dossier.</Text>}
 
       <Text style={[s.muted, { textAlign: 'center', marginTop: 24, lineHeight: 19 }]}>
-        Pour libérer de l’espace, ouvre un dossier lourd et supprime les fichiers dont tu n’as plus besoin. Les notes, liens et tâches ne comptent presque pas.
+        Pour libérer de l’espace, ouvre un dossier lourd et supprime les fichiers dont tu n’as plus besoin. Les notes et les liens ne comptent presque pas. Pense à sauvegarder sur Google Drive avant de supprimer.
       </Text>
     </ScrollView>
   );

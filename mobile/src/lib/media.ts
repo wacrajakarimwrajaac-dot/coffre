@@ -1,6 +1,6 @@
 import type { Folder, Item } from './data';
 
-export type Kind = 'photo' | 'video' | 'audio' | 'doc' | 'link' | 'note' | 'task';
+export type Kind = 'photo' | 'video' | 'audio' | 'doc' | 'link' | 'note';
 
 export function kindOf(i: Item): Kind {
   if (i.type !== 'file') return i.type;

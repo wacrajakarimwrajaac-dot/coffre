@@ -112,8 +112,8 @@ export default function Backup() {
     <ScrollView style={s.screen} contentContainerStyle={{ padding: 20, gap: 14, paddingBottom: 50 }}>
       <Stack.Screen options={{ title: 'Sauvegarde Google Drive' }} />
       <Text style={s.muted}>
-        Comme WhatsApp : tes dossiers, notes, liens, tâches et fichiers (photos, vidéos, vocaux, documents) sont copiés dans un
-        dossier « Coffre » de ton Google Drive. Seuls les nouveaux fichiers sont envoyés à chaque fois.
+        Comme WhatsApp : tout est enregistré sur ce téléphone, et tes dossiers, notes, liens et fichiers (photos, vidéos, vocaux,
+        documents) sont copiés dans un dossier « Coffre » de ton Google Drive. Si tu changes de téléphone, restaure-les d’ici.
       </Text>
 
       {!DRIVE_CONFIGURED ? (

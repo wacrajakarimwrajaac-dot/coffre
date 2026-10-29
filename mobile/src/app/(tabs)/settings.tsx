@@ -4,6 +4,7 @@ import { Alert, Linking, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { Logo } from '@/components/Logo';
+import { StorageBar } from '@/components/StorageBar';
 import { ListRow, SectionLabel, Sheet, SheetRow, s } from '@/components/ui';
 import { deleteAccount } from '@/lib/account';
 import { APP_VERSION, PRIVACY_URL, SUPPORT_EMAIL } from '@/lib/appInfo';
@@ -14,7 +15,6 @@ import { C } from '@/lib/theme';
 import { useTheme, type ThemePref } from '@/lib/themeProvider';
 import { formatSize } from '@/lib/util';
 
-const PLAN_NAMES: Record<string, string> = { free: 'Gratuit', plus: 'Plus', premium: 'Premium' };
 const THEMES: [ThemePref, string, IconName][] = [['system', 'Automatique (comme le téléphone)', 'sun-moon'], ['light', 'Clair', 'sun'], ['dark', 'Sombre', 'moon']];
 
 const lead = (name: IconName, color: string = C.muted): ReactNode => (
@@ -35,13 +35,12 @@ export default function Settings() {
   }, []);
 
   const usage = st.usage;
-  const pct = usage ? Math.min(100, (usage.usedBytes / usage.quotaBytes) * 100) : 0;
   const themeLabel = THEMES.find(([p]) => p === theme.pref)![1].split(' (')[0];
 
   const confirmDelete = () =>
     Alert.alert(
       'Supprimer ton compte ?',
-      'Tous tes dossiers, notes, liens, tâches et fichiers seront définitivement supprimés de Coffre. Les copies déjà présentes dans ton Google Drive restent à toi. Cette action est irréversible.',
+      'Ton compte et tout ce que Coffre garde sur ce téléphone (dossiers, notes, liens, fichiers) seront définitivement supprimés. Les copies déjà présentes dans ton Google Drive restent à toi. Cette action est irréversible.',
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Supprimer définitivement', style: 'destructive', onPress: async () => {
@@ -65,7 +64,7 @@ export default function Settings() {
         <Logo size={44} withName={false} />
         <View style={{ flex: 1 }}>
           <Text numberOfLines={1} style={{ color: C.text, fontSize: 16, fontWeight: '700' }}>{email}</Text>
-          {usage && <Text style={s.muted}>Formule {PLAN_NAMES[usage.plan] ?? usage.plan}</Text>}
+          <Text style={s.muted}>Tes données restent sur ce téléphone</Text>
         </View>
       </View>
 
@@ -73,12 +72,10 @@ export default function Settings() {
         <View style={{ marginTop: 18, gap: 8 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={{ color: C.text, fontWeight: '600' }}>Espace utilisé</Text>
-            <Text style={s.muted}>{formatSize(usage.usedBytes)} sur {formatSize(usage.quotaBytes)}</Text>
+            <Text style={s.muted}>{formatSize(usage.usedBytes)}</Text>
           </View>
-          <View style={{ height: 5, backgroundColor: C.track, borderRadius: 3, overflow: 'hidden' }}>
-            <View style={{ height: 5, width: `${pct}%`, backgroundColor: pct > 90 ? C.danger : C.primary }} />
-          </View>
-          <Text style={s.muted}>Fichier max : {formatSize(usage.maxFileBytes)}</Text>
+          <StorageBar usage={usage} />
+          {usage.totalBytes > 0 && <Text style={s.muted}>{formatSize(usage.freeBytes)} libres sur {formatSize(usage.totalBytes)}</Text>}
         </View>
       )}
 

@@ -2,7 +2,6 @@ import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
-import { DuePicker } from '@/components/DuePicker';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { Button, Input, s } from '@/components/ui';
 import { addFile, saveItem } from '@/lib/data';
@@ -10,14 +9,13 @@ import { useStore } from '@/lib/store';
 import { C } from '@/lib/theme';
 import { hostOf, normalizeUrl, uid } from '@/lib/util';
 
-const TITLES: Record<string, string> = { link: 'Nouveau lien', note: 'Nouvelle note', task: 'Nouvelle tâche', voice: 'Nouveau vocal' };
+const TITLES: Record<string, string> = { link: 'Nouveau lien', note: 'Nouvelle note', voice: 'Nouveau vocal' };
 
 export default function Add() {
   const { type = 'link', folder } = useLocalSearchParams<{ type?: string; folder: string }>();
   const st = useStore();
   const [main, setMain] = useState('');
   const [extra, setExtra] = useState('');
-  const [due, setDue] = useState<number | undefined>();
   const [busy, setBusy] = useState(false);
 
   // Pre-fill a link copied from Instagram/Facebook/YouTube ("Copier le lien").
@@ -42,9 +40,6 @@ export default function Add() {
       } else if (type === 'note') {
         if (!main.trim() && !extra.trim()) return;
         await saveItem({ ...base, type: 'note', title: main.trim() || extra.trim().split('\n')[0].slice(0, 60), text: extra.trim() });
-      } else if (type === 'task') {
-        if (!main.trim()) return;
-        await saveItem({ ...base, type: 'task', title: main.trim(), done: false, dueAt: due, text: extra.trim() || undefined });
       }
       await done();
     } catch (e) {
@@ -87,13 +82,6 @@ export default function Add() {
               <>
                 <Input autoFocus placeholder="Titre" value={main} onChangeText={setMain} />
                 <Input placeholder="Écris ton idée…" value={extra} onChangeText={setExtra} multiline />
-              </>
-            )}
-            {type === 'task' && (
-              <>
-                <Input autoFocus placeholder="Que faut-il faire ?" value={main} onChangeText={setMain} />
-                <DuePicker value={due} onChange={setDue} />
-                <Input placeholder="Détails (optionnel)" value={extra} onChangeText={setExtra} multiline />
               </>
             )}
             <Button title="Ajouter" busy={busy} onPress={save} />

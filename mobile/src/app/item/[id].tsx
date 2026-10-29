@@ -6,7 +6,6 @@ import * as Sharing from 'expo-sharing';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-import { DuePicker } from '@/components/DuePicker';
 import { Icon, parseIcon } from '@/components/Icon';
 import { Button, Chip, Empty, Input, Sheet, SheetRow, s } from '@/components/ui';
 import { deleteItem, fileUrl, saveItem, type Item } from '@/lib/data';
@@ -36,8 +35,7 @@ export default function ItemScreen() {
     if (it.type === 'link' && !link) return Alert.alert('Lien invalide');
     setBusy(true);
     try {
-      const dueChanged = it.dueAt !== original.dueAt;
-      await saveItem({ ...it, ...(link ? { url: link } : {}), ...(dueChanged ? { remindedAt: undefined } : {}) });
+      await saveItem({ ...it, ...(link ? { url: link } : {}) });
       await st.reload();
       router.back();
     } catch (e) {
@@ -61,10 +59,11 @@ export default function ItemScreen() {
     if (!url) return;
     setBusy(true);
     try {
+      // Share a copy carrying the original file name (the library keeps files under their id).
       const dest = new FsFile(Paths.cache, it.fileName ?? `${it.id}`);
       if (dest.exists) dest.delete();
-      const file = await FsFile.downloadFileAsync(url, dest);
-      await Sharing.shareAsync(file.uri, { mimeType: it.mime });
+      new FsFile(url).copy(dest);
+      await Sharing.shareAsync(dest.uri, { mimeType: it.mime });
     } catch (e) {
       Alert.alert('Partage impossible', (e as Error).message);
     } finally {
@@ -107,12 +106,6 @@ export default function ItemScreen() {
           <View>
             <Text style={s.label}>{it.type === 'note' ? 'Texte' : 'Notes'}</Text>
             <Input value={it.text ?? ''} onChangeText={(text) => set({ text })} multiline />
-          </View>
-        )}
-        {it.type === 'task' && (
-          <View>
-            <Text style={s.label}>Rappel</Text>
-            <DuePicker value={it.dueAt} onChange={(dueAt) => set({ dueAt })} />
           </View>
         )}
         <View>

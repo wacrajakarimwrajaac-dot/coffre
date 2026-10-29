@@ -1,3 +1,4 @@
+import { wipeLocal } from './data';
 import { disconnectDrive } from './driveAuth';
 import { supabase } from './supabase';
 
@@ -11,7 +12,7 @@ async function removeAllFiles(bucket: string, userId: string) {
   }
 }
 
-/** Deletes every file, then the account itself (folders, items, reports cascade). Irreversible. */
+/** Deletes the files left by the old cloud version, the account, then everything stored on this phone. Irreversible. */
 export async function deleteAccount() {
   const { data } = await supabase.auth.getSession();
   const user = data.session?.user;
@@ -21,5 +22,6 @@ export async function deleteAccount() {
   const { error } = await supabase.rpc('delete_my_account');
   if (error) throw new Error(error.message);
   await disconnectDrive();
+  wipeLocal();
   await supabase.auth.signOut({ scope: 'local' });
 }

@@ -12,13 +12,12 @@ import { useStore } from '@/lib/store';
 import { ACCENTS, C } from '@/lib/theme';
 import { uid } from '@/lib/util';
 
-type Filter = 'all' | 'media' | 'link' | 'note' | 'audio' | 'doc' | 'task';
-const FILTERS: [Filter, string][] = [['all', 'Tout'], ['media', 'Photos & vidéos'], ['link', 'Liens'], ['note', 'Notes'], ['audio', 'Vocaux'], ['doc', 'Documents'], ['task', 'Tâches']];
+type Filter = 'all' | 'media' | 'link' | 'note' | 'audio' | 'doc';
+const FILTERS: [Filter, string][] = [['all', 'Tout'], ['media', 'Photos & vidéos'], ['link', 'Liens'], ['note', 'Notes'], ['audio', 'Vocaux'], ['doc', 'Documents']];
 const SECTIONS: { kind: Kind; title: string; filter: Filter }[] = [
   { kind: 'photo', title: 'Photos', filter: 'media' }, { kind: 'video', title: 'Vidéos', filter: 'media' },
   { kind: 'link', title: 'Liens', filter: 'link' }, { kind: 'note', title: 'Notes', filter: 'note' },
   { kind: 'audio', title: 'Vocaux', filter: 'audio' }, { kind: 'doc', title: 'Documents', filter: 'doc' },
-  { kind: 'task', title: 'Tâches', filter: 'task' },
 ];
 const MEDIA_PREVIEW = 6; // thumbnails shown per section in the "Tout" view
 
@@ -72,7 +71,7 @@ export default function FolderScreen() {
     Alert.alert('Supprimer le dossier ?', `« ${folder.name} », ses sous-dossiers et ${n} élément(s) seront supprimés.`, [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Supprimer', style: 'destructive', onPress: async () => {
-        await deleteFolder(folder.id, st.folders, st.items);
+        await deleteFolder(folder.id);
         await st.reload();
         router.back();
       } },

@@ -9,7 +9,15 @@ Un seul endroit pour ranger, par sujet : liens (reels Instagram/Facebook, YouTub
 - `web/` : site (Vite + React + TypeScript).
 - `supabase/schema.sql` : base cloud (Supabase) avec tables, sécurité par utilisateur et stockage des fichiers.
 - **Configuration de la base cloud : voir [SETUP.md](SETUP.md).** Si Supabase n'est pas configuré, le site fonctionne en mode local (IndexedDB, dans le navigateur).
-- `mobile/` : application Android + iPhone (Expo), même compte et même base. Voir [mobile/README.md](mobile/README.md).
+- `mobile/` : application Android + iPhone (Expo). Voir [mobile/README.md](mobile/README.md).
+
+## Où sont les données (depuis la v0.5.0 de l'app mobile)
+
+Comme WhatsApp, **le contenu vit sur le téléphone** (`<documents>/coffre/<userId>/library.json` + `files/`), et la sauvegarde se fait dans le Google Drive de la personne. Supabase ne sert plus qu'au compte (connexion), aux signalements et à la suppression de compte.
+
+- Au premier lancement de la v0.5.0, l'app copie sur le téléphone les dossiers, liens, notes et fichiers de l'ancienne version cloud (rien n'est supprimé du cloud).
+- Les tâches et habitudes ont été retirées de l'app (elles feront une app séparée) ; leurs données restent dans Supabase.
+- Le site lit encore l'ancienne base cloud : il ne voit pas les ajouts faits sur le téléphone. Prochaine étape : le relier au téléphone par QR code (comme WhatsApp Web), avec un relais chiffré.
 
 ## Lancer le site
 

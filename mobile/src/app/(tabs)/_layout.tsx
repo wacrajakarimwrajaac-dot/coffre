@@ -24,7 +24,6 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Accueil', tabBarIcon: tab('house') }} />
       <Tabs.Screen name="media" options={{ title: 'Médias', tabBarIcon: tab('images') }} />
-      <Tabs.Screen name="discipline" options={{ title: 'Discipline', tabBarIcon: tab('flame') }} />
       <Tabs.Screen name="settings" options={{ title: 'Réglages', tabBarIcon: tab('sliders-horizontal') }} />
     </Tabs>
   );

@@ -2,11 +2,11 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { fileUrl, saveItem, type Item } from '@/lib/data';
+import { fileUrl, type Item } from '@/lib/data';
 import type { IconName } from '@/lib/icons';
 import { kindOf } from '@/lib/media';
 import { C } from '@/lib/theme';
-import { fileKind, formatDue, formatSize, hostOf, linkKind, platformOf, youtubeThumb } from '@/lib/util';
+import { fileKind, formatSize, hostOf, linkKind, platformOf, youtubeThumb } from '@/lib/util';
 import { Icon } from './Icon';
 import { s } from './ui';
 
@@ -40,8 +40,8 @@ export function MediaThumb({ item, size }: { item: Item; size: number }) {
   );
 }
 
-/** Flat list row (hairline underneath) for links, notes, voice notes, documents and tasks. */
-export function ItemRow({ item, folderLabel, onChanged, last }: { item: Item; folderLabel?: string; onChanged: () => void; last?: boolean }) {
+/** Flat list row (hairline underneath) for links, notes, voice notes, and documents. */
+export function ItemRow({ item, folderLabel, last }: { item: Item; folderLabel?: string; onChanged?: () => void; last?: boolean }) {
   const kind = kindOf(item);
   const thumb = useFileUrl(item.id, kind === 'photo');
 
@@ -59,8 +59,6 @@ export function ItemRow({ item, folderLabel, onChanged, last }: { item: Item; fo
   } else if (item.type === 'note') {
     tint = C.warn;
     subtitle = (item.text ?? '').replace(/\s+/g, ' ').trim() || 'Note';
-  } else if (item.type === 'task') {
-    subtitle = item.dueAt ? formatDue(item.dueAt) : 'Tâche';
   } else {
     icon = kind === 'audio' ? 'mic' : kind === 'video' ? 'video' : kind === 'photo' ? 'image' : 'file';
     tint = kind === 'audio' ? C.primary : kind === 'doc' ? C.muted : C.ok;
@@ -68,26 +66,16 @@ export function ItemRow({ item, folderLabel, onChanged, last }: { item: Item; fo
     subtitle = `${fileKind(item.mime)} · ${formatSize(item.size)}`;
   }
 
-  const overdue = item.type === 'task' && !item.done && !!item.dueAt && item.dueAt < Date.now();
 
   return (
     <Pressable onPress={() => openItem(item.id)} style={({ pressed }) => [{
       flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: C.line }, pressed && { opacity: 0.6 }]}>
-      {item.type === 'task' ? (
-        <Pressable hitSlop={10} onPress={async () => { await saveItem({ ...item, done: !item.done }); onChanged(); }} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
-          <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1.8, borderColor: item.done ? C.ok : C.muted, backgroundColor: item.done ? C.ok : 'transparent',
-            alignItems: 'center', justifyContent: 'center' }}>
-            {item.done && <Icon name="check" size={14} color="#06251b" strokeWidth={3} />}
-          </View>
-        </Pressable>
-      ) : (
-        <View style={{ width: 40, height: 40, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: `${tint}22` }}>
+      <View style={{ width: 40, height: 40, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: `${tint}22` }}>
           {image ? <Image source={image} style={{ width: 40, height: 40 }} contentFit="cover" recyclingKey={item.id} /> : <Icon name={icon} size={20} color={tint} />}
-        </View>
-      )}
+      </View>
       <View style={{ flex: 1, gap: 1 }}>
-        <Text numberOfLines={1} style={{ color: item.done ? C.muted : C.text, fontSize: 15.5, fontWeight: '600', textDecorationLine: item.done ? 'line-through' : 'none' }}>{item.title}</Text>
-        <Text numberOfLines={1} style={[s.muted, overdue && { color: C.danger }]}>{subtitle}</Text>
+        <Text numberOfLines={1} style={{ color: C.text, fontSize: 15.5, fontWeight: '600' }}>{item.title}</Text>
+        <Text numberOfLines={1} style={s.muted}>{subtitle}</Text>
         {folderLabel ? <Text numberOfLines={1} style={[s.muted, { fontSize: 12 }]}>{folderLabel}</Text> : null}
       </View>
     </Pressable>

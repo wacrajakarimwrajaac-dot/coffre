@@ -1,8 +1,8 @@
 // Google Drive backup, same layout and manifest as the website (a visible "Coffre" folder, real files,
 // coffre-sauvegarde.json), so a backup made on one device can be restored on the other.
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { File as FsFile, Paths, UploadType } from 'expo-file-system';
-import { deleteFolder, fileUrl, loadAll, saveFolder, saveItem, uploadBody, type Folder, type Item } from './data';
+import { File as FsFile, UploadType } from 'expo-file-system';
+import { INBOX, itemFile, loadAll, writeLibrary, type Folder, type Item } from './data';
 import { accessToken, hasDriveAccount } from './driveAuth';
 
 const API = 'https://www.googleapis.com/drive/v3';
@@ -181,17 +181,11 @@ export async function backupToDrive(progress: Progress = () => {}): Promise<{ up
         continue;
       }
       progress(`Envoi ${n + 1}/${files.length} : ${it.title}`);
-      const url = await fileUrl(it.id);
-      if (!url) continue;
-      const tmp = new FsFile(Paths.cache, `backup-${it.id}`);
-      try {
-        const local = await FsFile.downloadFileAsync(url, tmp, { idempotent: true });
-        const id = await uploadFile(local, { name: it.fileName ?? it.title, parents: [parent] }, it.mime ?? 'application/octet-stream');
-        driveFiles[it.id] = { id, parent };
-        uploaded++;
-      } finally {
-        if (tmp.exists) tmp.delete();
-      }
+      const local = itemFile(it);
+      if (!local.exists) continue;
+      const id = await uploadFile(local, { name: it.fileName ?? it.title, parents: [parent] }, it.mime ?? 'application/octet-stream');
+      driveFiles[it.id] = { id, parent };
+      uploaded++;
     }
 
     // Drive copies of deleted items/folders go to Drive's bin (recoverable for 30 days).
@@ -233,53 +227,46 @@ export async function restoreFromDrive(progress: Progress = () => {}): Promise<{
     const data = root ? (await readManifest(root)).data : null;
     if (!data) throw new Error('Aucune sauvegarde Coffre trouvée dans ce Google Drive');
 
-    // A fresh account auto-creates an empty inbox: drop it when the backup brings its own.
+    // Merge into what is already on the phone (same ids = same element, the backup wins).
     const local = await loadAll();
-    const backupIds = new Set(data.folders.map((f) => f.id));
-    for (const f of local.folders) {
-      if (!backupIds.has(f.id) && !f.parentId && f.name === 'Boîte de réception'
-        && !local.items.some((i) => i.folderId === f.id)
-        && data.folders.some((b) => !b.parentId && b.name === f.name)) {
-        await deleteFolder(f.id, local.folders, local.items);
-      }
-    }
+    const backupFolders = data.folders;
+    const backupItems = data.items.filter((i) => i.type === 'link' || i.type === 'note' || i.type === 'file');
+    const backupIds = new Set(backupFolders.map((f) => f.id));
+    // A fresh install auto-creates an empty inbox: drop it when the backup brings its own.
+    const keepLocal = local.folders.filter((f) => backupIds.has(f.id) ? false : !(
+      !f.parentId && f.name === INBOX && !local.items.some((i) => i.folderId === f.id)
+      && backupFolders.some((b) => !b.parentId && b.name === INBOX)));
+    const itemIds = new Set(backupItems.map((i) => i.id));
+    const folders = [...keepLocal, ...backupFolders];
+    const items = [...local.items.filter((i) => !itemIds.has(i.id)), ...backupItems];
 
-    // Parents before children.
-    const done = new Set<string>();
-    const pending = [...data.folders];
-    while (pending.length) {
-      const i = pending.findIndex((f) => !f.parentId || done.has(f.parentId) || !pending.some((p) => p.id === f.parentId));
-      const [f] = pending.splice(i === -1 ? 0 : i, 1);
-      await saveFolder(f);
-      done.add(f.id);
-    }
-
-    const files = data.items.filter((i) => i.type === 'file');
+    const files = backupItems.filter((i) => i.type === 'file');
     let n = 0;
     const errors: string[] = [];
-    for (const it of data.items) {
-      if (it.type !== 'file') {
-        await saveItem(it);
+    const missing = new Set<string>();
+    for (const it of files) {
+      const target = itemFile(it);
+      progress(`Téléchargement ${++n}/${files.length} : ${it.title}`);
+      if (target.exists && (target.size ?? 0) > 0) continue;
+      const drive = data.driveFiles[it.id];
+      if (!drive) {
+        missing.add(it.id);
+        errors.push(`${it.title} : absent de la sauvegarde`);
         continue;
       }
-      const drive = data.driveFiles[it.id];
-      if (!drive) continue;
-      progress(`Téléchargement ${++n}/${files.length} : ${it.title}`);
-      const tmp = new FsFile(Paths.cache, `restore-${it.id}`);
       try {
-        const local = await FsFile.downloadFileAsync(`${API}/files/${drive.id}?alt=media`, tmp, {
+        await FsFile.downloadFileAsync(`${API}/files/${drive.id}?alt=media`, target, {
           idempotent: true, headers: { Authorization: `Bearer ${await accessToken()}` },
         });
-        await saveItem(it); // row first: the server checks the quota, then accepts the upload
-        await uploadBody(it.id, local.uri, it.mime ?? 'application/octet-stream');
       } catch (e) {
+        missing.add(it.id);
         errors.push(`${it.title} : ${(e as Error).message}`);
-      } finally {
-        if (tmp.exists) tmp.delete();
       }
     }
+    // Files that could not be downloaded are left out rather than shown as broken entries.
+    await writeLibrary({ folders, items: items.filter((i) => !missing.has(i.id)) });
     if (errors.length) throw new Error(`Restauré, sauf : ${errors.join(' ; ')}`);
-    return { items: data.items.length };
+    return { items: backupItems.length };
   } finally {
     running = false;
   }

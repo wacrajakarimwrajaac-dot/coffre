@@ -66,7 +66,6 @@ export function AddSheet(p: {
     <Sheet visible={p.visible} onClose={p.onClose}>
       <SheetRow icon="link" label="Lien (Instagram, Facebook, YouTube…)" onPress={() => go('link')} />
       <SheetRow icon="file-text" label="Note" onPress={() => go('note')} />
-      <SheetRow icon="alarm-clock" label="Tâche avec rappel" onPress={() => go('task')} />
       <SheetRow icon="mic" label="Vocal" onPress={() => go('voice')} />
       <SheetRow icon="images" label="Photos et vidéos" onPress={() => fromLibrary(false)} />
       <SheetRow icon="camera" label="Prendre une photo ou vidéo" onPress={() => fromLibrary(true)} />

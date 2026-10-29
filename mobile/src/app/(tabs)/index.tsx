@@ -5,22 +5,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon, IconTile } from '@/components/Icon';
 import { ItemRow } from '@/components/ItemRow';
 import { Logo } from '@/components/Logo';
+import { StorageBar } from '@/components/StorageBar';
 import { Empty, Input, Pill, PromptModal, SectionLabel, s } from '@/components/ui';
 import { saveFolder } from '@/lib/data';
-import { addDays, currentStreak, dayKey, heatmap, isDue, isDone } from '@/lib/discipline';
-import { useHabits } from '@/lib/habitsStore';
 import type { IconName } from '@/lib/icons';
 import { folderUsage } from '@/lib/media';
 import { useStore } from '@/lib/store';
 import { C } from '@/lib/theme';
 import { formatSize, uid } from '@/lib/util';
 
-const QUICK: [string, IconName, string][] = [['link', 'link', 'Lien'], ['note', 'file-text', 'Note'], ['voice', 'mic', 'Vocal'], ['task', 'alarm-clock', 'Tâche']];
-const DAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const QUICK: [string, IconName, string][] = [['link', 'link', 'Lien'], ['note', 'file-text', 'Note'], ['voice', 'mic', 'Vocal']];
 
 export default function Home() {
   const st = useStore();
-  const hb = useHabits();
   const [query, setQuery] = useState('');
   const [newFolder, setNewFolder] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,17 +34,10 @@ export default function Home() {
   const usage = st.usage;
   const sizes = useMemo(() => new Map(folderUsage(st.folders, st.items).map((u) => [u.folder.id, u.bytes])), [st.folders, st.items]);
 
-  // Discipline summary: today + the current week (Monday first).
-  const due = hb.habits.filter((h) => isDue(h, hb.today));
-  const done = due.filter((h) => isDone(hb.checks, h.id, hb.today)).length;
-  const streak = Math.max(0, ...hb.habits.map((h) => currentStreak(h, hb.checks, hb.today)));
-  const monday = addDays(hb.today, -((new Date(hb.today + 'T00:00:00').getDay() + 6) % 7));
-  const week = useMemo(() => heatmap(hb.habits, hb.checks, monday, addDays(monday, 6)), [hb.habits, hb.checks, monday]);
-  const date = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all([st.reload(), hb.reload()]);
+    await st.reload();
     setRefreshing(false);
   };
 
@@ -60,8 +50,8 @@ export default function Home() {
         </Pressable>
       </View>
 
-      <Text style={[s.h1, { marginTop: 22 }]}>Aujourd’hui</Text>
-      <Text style={[s.muted, { fontSize: 14 }]}>{date.charAt(0).toUpperCase() + date.slice(1)}</Text>
+      <Text style={[s.h1, { marginTop: 22 }]}>Mon Coffre</Text>
+      <Text style={[s.muted, { fontSize: 14 }]}>{st.items.length} élément{st.items.length > 1 ? 's' : ''} · enregistrés sur ce téléphone</Text>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, marginTop: 16 }}>
         <Icon name="search" size={18} color={C.muted} />
@@ -77,37 +67,6 @@ export default function Home() {
                 <Pill key={type} icon={icon} label={label} onPress={() => router.push({ pathname: '/add', params: { type, folder: inbox.id } })} />
               ))}
             </ScrollView>
-          )}
-
-          <SectionLabel right={<Text onPress={() => router.push('/discipline')} style={{ color: C.primary, fontSize: 13, fontWeight: '600' }}>Ouvrir</Text>}>Discipline</SectionLabel>
-          {hb.habits.length === 0 ? (
-            <Pressable onPress={() => router.push('/discipline/new')} style={[s.card, { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-              <Icon name="flame" size={22} color={C.warn} />
-              <Text style={{ color: C.text, flex: 1, fontSize: 15 }}>Crée ta première habitude ou un défi de 90 jours</Text>
-              <Icon name="plus" size={20} color={C.primary} />
-            </Pressable>
-          ) : (
-            <Pressable onPress={() => router.push('/discipline')}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                <Text style={{ color: C.text, fontSize: 24, fontWeight: '700', letterSpacing: -0.6 }}>{done} sur {due.length}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <Icon name="flame" size={16} color={C.warn} />
-                  <Text style={{ color: C.warn, fontWeight: '600' }}>{streak} jour{streak > 1 ? 's' : ''}</Text>
-                </View>
-              </View>
-              <View style={{ height: 4, borderRadius: 2, backgroundColor: C.track, marginTop: 10, overflow: 'hidden' }}>
-                <View style={{ height: 4, width: `${due.length ? (done / due.length) * 100 : 0}%`, backgroundColor: C.primary }} />
-              </View>
-              <View style={{ flexDirection: 'row', gap: 6, marginTop: 12 }}>
-                {week.map((c, i) => (
-                  <View key={c.day} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-                    <Text style={{ color: c.day === hb.today ? C.text : C.muted, fontSize: 11, fontWeight: c.day === hb.today ? '700' : '400' }}>{DAYS[i]}</Text>
-                    <View style={{ height: 7, alignSelf: 'stretch', borderRadius: 4, backgroundColor: c.ratio === null || c.day > hb.today ? C.track : C.primary,
-                      opacity: c.ratio === null || c.day > hb.today ? 1 : 0.25 + 0.75 * c.ratio }} />
-                  </View>
-                ))}
-              </View>
-            </Pressable>
           )}
 
           <SectionLabel right={<Text onPress={() => setNewFolder(true)} style={{ color: C.primary, fontSize: 13, fontWeight: '600' }}>Nouveau</Text>}>Dossiers</SectionLabel>
@@ -129,11 +88,10 @@ export default function Home() {
         <Pressable onPress={() => router.push('/storage')} style={{ marginTop: 26, gap: 8 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={s.sectionLabel}>Espace</Text>
-            <Text style={s.muted}>{formatSize(usage.usedBytes)} sur {formatSize(usage.quotaBytes)}</Text>
+            <Text style={s.muted}>{formatSize(usage.usedBytes)} sur ce téléphone</Text>
           </View>
-          <View style={{ height: 4, borderRadius: 2, backgroundColor: C.track, overflow: 'hidden' }}>
-            <View style={{ height: 4, width: `${Math.min(100, (usage.usedBytes / usage.quotaBytes) * 100)}%`, backgroundColor: usage.usedBytes / usage.quotaBytes > 0.9 ? C.danger : C.primary }} />
-          </View>
+          <StorageBar usage={usage} />
+          {usage.totalBytes > 0 && <Text style={s.muted}>{formatSize(usage.freeBytes)} libres sur le téléphone</Text>}
           <Text style={{ color: C.primary, fontSize: 13, fontWeight: '600' }}>Voir ce qui prend de la place</Text>
         </Pressable>
       )}
