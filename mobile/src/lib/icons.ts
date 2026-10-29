@@ -63,6 +63,8 @@ import BookOpen from 'lucide-react-native/icons/book-open';
 import GraduationCap from 'lucide-react-native/icons/graduation-cap';
 import PenLine from 'lucide-react-native/icons/pen-line';
 import Laptop from 'lucide-react-native/icons/laptop';
+import QrCode from 'lucide-react-native/icons/qr-code';
+import MonitorSmartphone from 'lucide-react-native/icons/monitor-smartphone';
 import Briefcase from 'lucide-react-native/icons/briefcase';
 import Wallet from 'lucide-react-native/icons/wallet';
 import ShoppingCart from 'lucide-react-native/icons/shopping-cart';
@@ -152,6 +154,8 @@ export const ICONS = {
   'graduation-cap': GraduationCap,
   'pen-line': PenLine,
   'laptop': Laptop,
+  'qr-code': QrCode,
+  'monitor-smartphone': MonitorSmartphone,
   'briefcase': Briefcase,
   'wallet': Wallet,
   'shopping-cart': ShoppingCart,

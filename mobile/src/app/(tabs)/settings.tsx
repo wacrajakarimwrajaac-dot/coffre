@@ -81,7 +81,8 @@ export default function Settings() {
 
       <SectionLabel>Données</SectionLabel>
       <ListRow left={lead('hard-drive')} title="Espace de stockage" subtitle="Quel dossier utilise le plus de place" onPress={() => router.push('/storage')} />
-      <ListRow left={lead('cloud')} title="Sauvegarde Google Drive" subtitle="Copie automatique dans ton Drive" onPress={() => router.push('/backup')} last />
+      <ListRow left={lead('cloud')} title="Sauvegarde Google Drive" subtitle="Copie automatique dans ton Drive" onPress={() => router.push('/backup')} />
+      <ListRow left={lead('monitor-smartphone')} title="Coffre Web" subtitle="Utiliser Coffre sur l’ordinateur (QR code)" onPress={() => router.push('/link')} last />
 
       <SectionLabel>Apparence</SectionLabel>
       <ListRow left={lead(theme.scheme === 'light' ? 'sun' : 'moon')} title="Thème" subtitle={themeLabel} onPress={() => setThemeSheet(true)} last />

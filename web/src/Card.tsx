@@ -1,47 +1,73 @@
-import { useEffect, useState } from 'react';
-import { getBlob, type Item } from './db';
-import { download, formatDue, formatSize, hostOf, linkKind, platformOf, youtubeThumb } from './util';
+import { useEffect, useRef, useState } from 'react';
+import type { Item } from './db';
+import { phone } from './phone';
+import { download, formatSize, hostOf, linkKind, platformOf, youtubeThumb } from './util';
 
+/** Loads a stored file from the phone (or this browser's cache) once `enabled`. */
 function useBlobUrl(id: string, enabled: boolean) {
   const [url, setUrl] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let objectUrl: string | null = null;
     let alive = true;
-    getBlob(id).then((b) => {
-      if (!b || !alive) return;
-      objectUrl = URL.createObjectURL(b);
-      setUrl(objectUrl);
-    });
+    phone.getBlob(id, (done, total) => alive && setProgress(Math.round((done / total) * 100)))
+      .then((b) => {
+        if (!alive) return;
+        objectUrl = URL.createObjectURL(b);
+        setUrl(objectUrl);
+      })
+      .catch((e: Error) => alive && setError(e.message))
+      .finally(() => alive && setProgress(null));
     return () => {
       alive = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [id, enabled]);
-  return url;
+  return { url, progress, error };
+}
+
+/** True once the element has been on screen (photos load only when you scroll to them). */
+function useSeen<T extends Element>() {
+  const ref = useRef<T>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setSeen(true), { rootMargin: '300px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen]);
+  return [ref, seen] as const;
 }
 
 interface Props {
   item: Item;
   folderLabel?: string;
   onEdit: () => void;
-  onToggle: () => void;
 }
 
-export function Card({ item, folderLabel, onEdit, onToggle }: Props) {
-  const isMedia = item.type === 'file' && /^(image|video|audio)\//.test(item.mime ?? '');
-  const blobUrl = useBlobUrl(item.id, isMedia);
-  const overdue = item.type === 'task' && !item.done && item.dueAt !== undefined && item.dueAt < Date.now();
+export function Card({ item, folderLabel, onEdit }: Props) {
+  const kind = item.type === 'file' ? (item.mime ?? '').split('/')[0] : '';
+  const isPhoto = kind === 'image';
+  const isPlayable = kind === 'video' || kind === 'audio';
+  const [ref, seen] = useSeen<HTMLElement>();
+  const [play, setPlay] = useState(false);
+  const blob = useBlobUrl(item.id, (isPhoto && seen) || (isPlayable && play));
 
   const openFile = async () => {
-    const b = await getBlob(item.id);
-    if (!b) return;
-    if (/pdf|^text\//.test(item.mime ?? '')) window.open(URL.createObjectURL(b), '_blank');
-    else download(b, item.fileName ?? item.title);
+    try {
+      const b = await phone.getBlob(item.id);
+      if (/pdf|^text\//.test(item.mime ?? '')) window.open(URL.createObjectURL(b), '_blank');
+      else download(b, item.fileName ?? item.title);
+    } catch (e) {
+      alert((e as Error).message);
+    }
   };
 
   return (
-    <article className={`card card-${item.type}${item.done ? ' is-done' : ''}`}>
+    <article ref={ref} className={`card card-${item.type}`}>
       {item.type === 'link' && item.url && <LinkBody url={item.url} title={item.title} text={item.text} />}
 
       {item.type === 'note' && (
@@ -54,29 +80,24 @@ export function Card({ item, folderLabel, onEdit, onToggle }: Props) {
 
       {item.type === 'file' && (
         <>
-          {blobUrl && item.mime?.startsWith('image/') && <img className="thumb" src={blobUrl} alt={item.title} />}
-          {blobUrl && item.mime?.startsWith('video/') && <video className="thumb" src={blobUrl} controls preload="metadata" />}
-          {blobUrl && item.mime?.startsWith('audio/') && <audio className="audio" src={blobUrl} controls />}
+          {isPhoto && (blob.url ? <img className="thumb" src={blob.url} alt={item.title} /> : <div className="thumb placeholder">{blob.error ?? (blob.progress !== null ? `${blob.progress} %` : '')}</div>)}
+          {kind === 'video' && (blob.url ? <video className="thumb" src={blob.url} controls autoPlay /> : (
+            <button className="thumb placeholder play" onClick={() => setPlay(true)} disabled={play && !blob.error}>
+              {blob.error ?? (play ? `Chargement depuis le téléphone… ${blob.progress ?? 0} %` : `▶ Lire la vidéo (${formatSize(item.size)})`)}
+            </button>
+          ))}
+          {kind === 'audio' && (blob.url ? <audio className="audio" src={blob.url} controls autoPlay /> : (
+            <button className="btn-ghost small audio-load" onClick={() => setPlay(true)} disabled={play && !blob.error}>
+              {blob.error ?? (play ? `Chargement… ${blob.progress ?? 0} %` : '▶ Écouter')}
+            </button>
+          ))}
           <div className="card-body">
             <span className="chip">{fileKind(item.mime)}</span>
             <h3>{item.title}</h3>
             <p className="meta">{formatSize(item.size)}</p>
-            {!isMedia && <button className="btn-ghost small" onClick={openFile}>Ouvrir</button>}
+            {!isPhoto && !isPlayable && <button className="btn-ghost small" onClick={openFile}>Ouvrir</button>}
           </div>
         </>
-      )}
-
-      {item.type === 'task' && (
-        <div className="card-body task-row">
-          <input type="checkbox" checked={!!item.done} onChange={onToggle} aria-label="Terminée" />
-          <div>
-            <h3>{item.title}</h3>
-            {item.text && <p className="meta">{item.text}</p>}
-            {item.dueAt && (
-              <p className={`due${overdue ? ' overdue' : ''}`}>⏰ {formatDue(item.dueAt)}{overdue ? ' · en retard' : ''}</p>
-            )}
-          </div>
-        </div>
       )}
 
       <footer className="card-foot">

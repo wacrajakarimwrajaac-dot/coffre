@@ -1,5 +1,6 @@
 import { wipeLocal } from './data';
 import { disconnectDrive } from './driveAuth';
+import { forgetDevices } from './link/phone';
 import { supabase } from './supabase';
 
 async function removeAllFiles(bucket: string, userId: string) {
@@ -23,5 +24,6 @@ export async function deleteAccount() {
   if (error) throw new Error(error.message);
   await disconnectDrive();
   wipeLocal();
+  await forgetDevices(user.id);
   await supabase.auth.signOut({ scope: 'local' });
 }

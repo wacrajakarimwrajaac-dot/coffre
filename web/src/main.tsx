@@ -1,11 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { AuthGate } from './Auth';
+import { PhoneGate } from './Pair';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthGate>{(email) => <App email={email} />}</AuthGate>
+    <PhoneGate><App /></PhoneGate>
   </StrictMode>,
 );

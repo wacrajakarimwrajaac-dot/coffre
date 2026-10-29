@@ -191,6 +191,26 @@ export async function saveItem(it: Item) {
   await commit();
 }
 
+/** Adds or replaces many folders and items in one write (e.g. bookmarks imported from the website). */
+export async function saveMany(folders: Folder[], items: Item[]) {
+  const l = await read();
+  for (const f of folders) {
+    const i = l.folders.findIndex((x) => x.id === f.id);
+    if (i >= 0) l.folders[i] = f;
+    else l.folders.push(f);
+  }
+  for (const it of items) {
+    const i = l.items.findIndex((x) => x.id === it.id);
+    if (i >= 0) l.items[i] = it;
+    else l.items.push(it);
+  }
+  await commit();
+}
+
+export async function getItem(id: string): Promise<Item | undefined> {
+  return (await read()).items.find((x) => x.id === id);
+}
+
 function removeFile(it: Item) {
   try {
     const f = itemFile(it);

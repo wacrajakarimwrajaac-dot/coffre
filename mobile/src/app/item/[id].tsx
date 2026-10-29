@@ -62,7 +62,7 @@ export default function ItemScreen() {
       // Share a copy carrying the original file name (the library keeps files under their id).
       const dest = new FsFile(Paths.cache, it.fileName ?? `${it.id}`);
       if (dest.exists) dest.delete();
-      new FsFile(url).copy(dest);
+      await new FsFile(url).copy(dest);
       await Sharing.shareAsync(dest.uri, { mimeType: it.mime });
     } catch (e) {
       Alert.alert('Partage impossible', (e as Error).message);

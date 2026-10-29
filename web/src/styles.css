@@ -234,3 +234,18 @@ h1, h2, h3 { margin: 0; }
 .status { font-size: 12px; font-weight: 700; }
 .status-in_progress { color: #f5b84b; } .status-resolved { color: var(--ok); } .status-new, .status-closed { color: var(--muted); }
 .modal .filters { margin: 0; }
+
+/* Coffre Web: phone link */
+.banner { background: #ff6b5b1f; border: 1px solid var(--primary); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot.on { background: var(--ok); }
+.thumb.placeholder { display: grid; place-items: center; color: var(--muted); font-size: 13px; background: var(--panel); border: 0; width: 100%; }
+.thumb.play { cursor: pointer; color: var(--text); }
+.audio-load { margin: 12px 10px 0; }
+.pair { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+.pair-card { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: 880px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 36px; }
+.pair-steps { max-width: 380px; display: flex; flex-direction: column; gap: 14px; }
+.pair-steps ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.qr { background: #fff; border-radius: 16px; padding: 14px; width: 264px; height: 264px; display: grid; place-items: center; }
+.qr svg { width: 100%; height: 100%; display: block; }
+.code { font-size: 22px; font-weight: 700; letter-spacing: 3px; }

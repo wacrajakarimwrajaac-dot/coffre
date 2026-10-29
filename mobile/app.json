@@ -3,7 +3,7 @@
     "name": "Coffre",
     "slug": "coffre",
     "scheme": "coffre",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -13,7 +13,8 @@
       "bundleIdentifier": "com.coffre.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Coffre utilise le micro pour enregistrer tes notes vocales.",
-        "NSPhotoLibraryUsageDescription": "Coffre accède à tes photos et vidéos pour les ranger dans tes dossiers."
+        "NSPhotoLibraryUsageDescription": "Coffre accède à tes photos et vidéos pour les ranger dans tes dossiers.",
+        "NSCameraUsageDescription": "Coffre utilise la caméra pour scanner le QR code du site Coffre Web."
       }
     },
     "android": {
@@ -25,7 +26,6 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
-        "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
@@ -42,19 +42,20 @@
         }
       ],
       [
-        "expo-notifications",
-        {
-          "color": "#ff6b5b"
-        }
-      ],
-      [
         "expo-image-picker",
         {
           "photosPermission": "Coffre accède à tes photos et vidéos pour les ranger dans tes dossiers."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Coffre utilise la caméra pour scanner le QR code du site Coffre Web.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-video",
-      "@react-native-community/datetimepicker",
       "expo-web-browser",
       [
         "expo-share-intent",
@@ -126,6 +127,6 @@
       }
     },
     "owner": "anassaoud1s-team",
-    "description": "Coffre — tout ton sujet, au même endroit : liens, notes, vocaux, photos, vidéos, documents et tâches avec rappels."
+    "description": "Coffre — tout ton sujet, au même endroit : liens, notes, vocaux, photos, vidéos et documents, gardés sur ton téléphone et sauvegardés sur ton Google Drive."
   }
 }

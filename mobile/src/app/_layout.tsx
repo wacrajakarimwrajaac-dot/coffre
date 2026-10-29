@@ -9,6 +9,7 @@ import { AutoBackup } from '@/components/AutoBackup';
 import { Login } from '@/components/Login';
 import { sendReport } from '@/lib/reports';
 import { SHARE_AVAILABLE } from '@/lib/share';
+import { LinkProvider } from '@/lib/link/phone';
 import { StoreProvider } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { C } from '@/lib/theme';
@@ -81,6 +82,7 @@ function App() {
         <Login />
       ) : (
         <StoreProvider key={session.user.id} userId={session.user.id}>
+          <LinkProvider userId={session.user.id}>
           <ShareRouter />
           <AutoBackup />
           <Stack
@@ -98,6 +100,7 @@ function App() {
             <Stack.Screen name="share" options={{ presentation: 'modal', title: 'Enregistrer dans Coffre' }} />
             <Stack.Screen name="report" options={{ presentation: 'modal' }} />
           </Stack>
+          </LinkProvider>
         </StoreProvider>
       )}
     </SafeAreaProvider>
