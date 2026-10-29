@@ -1,5 +1,6 @@
 import qrcode from 'qrcode-generator';
 import { useEffect, useMemo, type ReactNode } from 'react';
+import { Icon } from './icons';
 import { phone, usePhone } from './phone';
 
 /** WhatsApp-Web-style gate: QR code until a phone is linked, then the app (while the phone answers). */
@@ -14,10 +15,11 @@ export function PhoneGate({ children }: { children: ReactNode }) {
   if (!st.loaded) {
     return (
       <Screen>
-        <h2>Connexion à ton téléphone…</h2>
-        {st.code && <p className="meta">Code de vérification (le même s’affiche sur ton téléphone) : <span className="code">{st.code}</span></p>}
-        <p className="meta">Ouvre Coffre sur ton téléphone et garde-le connecté à internet. Tes données restent sur le téléphone ; ce site les affiche.</p>
-        <button className="btn-ghost small" onClick={() => void phone.forget()}>Afficher un nouveau QR code</button>
+        <div className="spinner" />
+        <h2>{st.status === 'offline' ? 'Ton téléphone ne répond pas' : 'Chargement depuis ton téléphone…'}</h2>
+        {st.code && <p className="muted">Code de vérification, le même que sur ton téléphone : <b className="code">{st.code}</b></p>}
+        <p className="muted">Ouvre Coffre sur ton téléphone et garde-le connecté à internet. Tes données restent sur le téléphone : ce site les affiche.</p>
+        <button className="ghost" onClick={() => void phone.forget()}><Icon name="qr-code" size={16} /> Afficher un nouveau QR code</button>
       </Screen>
     );
   }
@@ -27,17 +29,15 @@ export function PhoneGate({ children }: { children: ReactNode }) {
 function Screen({ children }: { children: ReactNode }) {
   return (
     <div className="pair">
-      <div className="pair-card" style={{ flexDirection: 'column', alignItems: 'flex-start', maxWidth: 520, gap: 14 }}>
-        <div className="brand" style={{ padding: 0 }}><img src="/favicon.svg" alt="" width={28} height={28} /> Coffre</div>
-        {children}
-      </div>
+      <div className="pair-top"><img src="/logo-mark.png" alt="" width={30} height={30} /> Coffre Web</div>
+      <div className="pair-card center">{children}</div>
     </div>
   );
 }
 
 function PairScreen({ qr }: { qr: string }) {
   const path = useMemo(() => {
-    const q = qrcode(0, 'M');
+    const q = qrcode(0, 'H');
     q.addData(qr);
     q.make();
     const n = q.getModuleCount();
@@ -48,19 +48,23 @@ function PairScreen({ qr }: { qr: string }) {
 
   return (
     <div className="pair">
+      <div className="pair-top"><img src="/logo-mark.png" alt="" width={30} height={30} /> Coffre Web</div>
       <div className="pair-card">
         <div className="pair-steps">
-          <div className="brand" style={{ padding: 0 }}><img src="/favicon.svg" alt="" width={30} height={30} /> Coffre Web</div>
-          <h1 style={{ fontSize: 26 }}>Utilise Coffre sur ton ordinateur</h1>
+          <h1>Utilise Coffre sur ton ordinateur</h1>
           <ol>
-            <li>Ouvre <b>Coffre</b> sur ton téléphone.</li>
-            <li>Va dans <b>Réglages → Coffre Web</b>.</li>
-            <li>Touche <b>Connecter un appareil</b> et scanne ce code.</li>
+            <li><span className="step">1</span><span>Ouvre <b>Coffre</b> sur ton téléphone.</span></li>
+            <li><span className="step">2</span><span>Va dans <b>Réglages</b> <Icon name="chevron-right" size={14} /> <b>Coffre Web</b>.</span></li>
+            <li><span className="step">3</span><span>Touche <b>Connecter un appareil</b> et scanne ce code.</span></li>
           </ol>
-          <p className="meta">Tes données restent sur ton téléphone : ce site les affiche tant que Coffre est ouvert dessus. Tout est chiffré de bout en bout.</p>
+          <div className="pair-note">
+            <Icon name="shield-check" size={18} />
+            <span>Tes données restent sur ton téléphone. Ce site les affiche tant que Coffre est ouvert dessus, chiffrées de bout en bout.</span>
+          </div>
         </div>
         <div className="qr" aria-label="QR code à scanner avec l’app Coffre">
-          <svg viewBox={`-1 -1 ${path.n + 2} ${path.n + 2}`} shapeRendering="crispEdges"><path d={path.d} fill="#0b1020" /></svg>
+          <svg viewBox={`-1 -1 ${path.n + 2} ${path.n + 2}`} shapeRendering="crispEdges"><path d={path.d} fill="#14151A" /></svg>
+          <img className="qr-logo" src="/logo-mark.png" alt="" />
         </div>
       </div>
     </div>

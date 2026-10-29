@@ -86,8 +86,10 @@ class Phone {
       if (Date.now() - this.lastSeen > OFFLINE_AFTER) {
         if (status !== 'offline') this.set({ status: 'offline' });
         void this.hello(); // the phone answers as soon as Coffre is opened on it
+      } else if (!this.state.loaded) {
+        void this.hello(); // just linked or reconnected: ask again until the library arrives
       }
-    }, 10_000);
+    }, 5_000);
   }
 
   private startPairing() {

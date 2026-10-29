@@ -15,6 +15,7 @@ export function Login() {
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [withEmail, setWithEmail] = useState(false);
 
   const submit = async () => {
     setBusy(true);
@@ -53,24 +54,36 @@ export function Login() {
           <Logo size={44} />
           <Text style={s.muted}>Tes liens, notes, vocaux et fichiers, rangés sur ton téléphone et sauvegardés sur ton Drive.</Text>
           <Pressable onPress={google} disabled={googleBusy}
-            style={{ backgroundColor: '#fff', borderRadius: 12, paddingVertical: 13, flexDirection: 'row', justifyContent: 'center', gap: 10, opacity: googleBusy ? 0.6 : 1 }}>
+            style={{ backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: C.line, paddingVertical: 13, flexDirection: 'row', justifyContent: 'center', gap: 10, opacity: googleBusy ? 0.6 : 1 }}>
             <Text style={{ color: '#4285f4', fontWeight: '900', fontSize: 16 }}>G</Text>
             <Text style={{ color: '#1f1f1f', fontWeight: '600', fontSize: 16 }}>{googleBusy ? 'Connexion…' : 'Continuer avec Google'}</Text>
           </Pressable>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
-            <Text style={s.muted}>ou</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
-          </View>
-          <Input placeholder="Email" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} />
-          <Input placeholder="Mot de passe" secureTextEntry autoComplete={mode === 'in' ? 'current-password' : 'new-password'}
-            value={password} onChangeText={setPassword} />
-          {msg && <Text style={{ color: msg.error ? C.danger : C.muted }}>{msg.text}</Text>}
-          <Button title={mode === 'in' ? 'Se connecter' : 'Créer mon compte'} busy={busy}
-            disabled={!email.trim() || password.length < 6} onPress={submit} />
-          <Button kind="ghost" title={mode === 'in' ? 'Pas de compte ? Créer un compte' : 'Déjà un compte ? Se connecter'}
-            onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setMsg(null); }} />
-          {mode === 'in' && <Button kind="ghost" title="Mot de passe oublié" onPress={reset} />}
+          {!withEmail ? (
+            <>
+              {msg && <Text style={{ color: msg.error ? C.danger : C.muted }}>{msg.text}</Text>}
+              <Button kind="ghost" title="Continuer avec un email" onPress={() => { setWithEmail(true); setMsg(null); }} />
+              <Text style={[s.muted, { textAlign: 'center', fontSize: 12, lineHeight: 18 }]}>
+                Ensuite, pour utiliser Coffre sur ton ordinateur, ouvre le site Coffre et scanne son QR code depuis Réglages → Coffre Web.
+              </Text>
+            </>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
+                <Text style={s.muted}>avec un email</Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
+              </View>
+              <Input placeholder="Email" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} />
+              <Input placeholder="Mot de passe" secureTextEntry autoComplete={mode === 'in' ? 'current-password' : 'new-password'}
+                value={password} onChangeText={setPassword} />
+              {msg && <Text style={{ color: msg.error ? C.danger : C.muted }}>{msg.text}</Text>}
+              <Button title={mode === 'in' ? 'Se connecter' : 'Créer mon compte'} busy={busy}
+                disabled={!email.trim() || password.length < 6} onPress={submit} />
+              <Button kind="ghost" title={mode === 'in' ? 'Pas de compte ? Créer un compte' : 'Déjà un compte ? Se connecter'}
+                onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setMsg(null); }} />
+              {mode === 'in' && <Button kind="ghost" title="Mot de passe oublié" onPress={reset} />}
+            </>
+          )}
           {PRIVACY_URL && (
             <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>
               En continuant, tu acceptes la <Text style={{ color: C.primary }} onPress={() => Linking.openURL(PRIVACY_URL)}>politique de confidentialité</Text>.

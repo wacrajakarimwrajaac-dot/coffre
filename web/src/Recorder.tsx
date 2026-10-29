@@ -84,10 +84,10 @@ export function Recorder({ onSave }: { onSave: (file: File) => void }) {
         <div className="rec-review">
           <audio src={clip.url} controls />
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du vocal" />
-          <div className="composer-foot">
-            <span className="meta">{fmt(seconds)} · {(clip.blob.size / 1024).toFixed(0)} Ko</span>
-            <button type="button" className="btn-ghost" onClick={discard}>Supprimer</button>
-            <button type="button" className="btn-primary" onClick={save}>Ajouter</button>
+          <div className="modal-actions">
+            <span className="muted grow">{fmt(seconds)} · {(clip.blob.size / 1024).toFixed(0)} Ko</span>
+            <button type="button" className="ghost" onClick={discard}>Recommencer</button>
+            <button type="button" className="btn primary" onClick={save}>Ajouter</button>
           </div>
         </div>
       )}

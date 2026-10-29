@@ -1,64 +1,44 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Card } from './Card';
-import { Recorder } from './Recorder';
-import { parseBookmarks, uid, type Folder, type Item, type ItemType } from './db';
-import { phone, usePhone, type PhoneState } from './phone';
+import { AddDialog, type AddKind } from './AddDialog';
+import { parseBookmarks, uid, type Folder, type Item } from './db';
+import { Icon, IconTile, type IconName } from './icons';
+import { FolderIconDialog, ItemDialog } from './ItemDialog';
+import { ItemRow, MediaTile } from './ItemRow';
+import { phone, usePhone } from './phone';
+import { setThemePref, useThemePref, type ThemePref } from './theme';
 import { formatSize, hostOf, normalizeUrl } from './util';
 
-type View = { kind: 'all' } | { kind: 'folder'; id: string };
-type Mode = 'link' | 'note' | 'voice' | 'file';
+type View = { kind: 'home' } | { kind: 'media' } | { kind: 'folder'; id: string };
+type Filter = 'all' | 'link' | 'note' | 'file';
 
-const TYPE_LABELS: Record<ItemType, string> = { link: 'Liens', note: 'Notes', file: 'Fichiers' };
-// Folders made in the mobile app use icons like "plane:blue"; the website shows a plain folder for those.
-const glyph = (i: string) => (/^[a-z0-9-]+:[a-z]+$/.test(i) ? '📁' : i);
+const FILTERS: [Filter, string][] = [['all', 'Tout'], ['link', 'Liens'], ['note', 'Notes'], ['file', 'Fichiers']];
+const QUICK: [AddKind, IconName, string][] = [['link', 'link', 'Lien'], ['note', 'file-text', 'Note'], ['voice', 'mic', 'Vocal'], ['file', 'upload', 'Fichier']];
+const THEMES: [ThemePref, IconName, string][] = [['system', 'sun-moon', 'Automatique'], ['light', 'sun', 'Clair'], ['dark', 'moon', 'Sombre']];
+const isMedia = (i: Item) => i.type === 'file' && /^(image|video)\//.test(i.mime ?? '');
 
 export default function App() {
   const st = usePhone();
   const folders = useMemo(() => [...st.folders].sort((a, b) => a.createdAt - b.createdAt), [st.folders]);
   const items = useMemo(() => [...st.items].sort((a, b) => b.createdAt - a.createdAt), [st.items]);
-  const [view, setView] = useState<View>({ kind: 'all' });
+  const [view, setView] = useState<View>({ kind: 'home' });
   const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<ItemType | null>(null);
-  const [editing, setEditing] = useState<Item | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [open, setOpen] = useState<Item | null>(null);
+  const [adding, setAdding] = useState<AddKind | null>(null);
+  const [iconFor, setIconFor] = useState<Folder | null>(null);
   const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
+  const [sending, setSending] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const bookmarksRef = useRef<HTMLInputElement>(null);
+  const theme = useThemePref();
+
   const toast = useCallback((text: string) => {
     const id = uid();
     setToasts((t) => [...t, { id, text }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
   }, []);
 
-  const folderById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
-  const childrenOf = useCallback((id: string | null) => folders.filter((f) => f.parentId === id), [folders]);
-  const descendants = useCallback(
-    (id: string): string[] => [id, ...childrenOf(id).flatMap((c) => descendants(c.id))],
-    [childrenOf],
-  );
-
-  const currentFolder = view.kind === 'folder' ? folderById.get(view.id) : undefined;
-  const targetFolderId = currentFolder?.id ?? folders[0]?.id;
-
-  const visible = useMemo(() => {
-    let list = items;
-    const q = query.trim().toLowerCase();
-    if (q) {
-      list = list.filter((i) => [i.title, i.text, i.url, i.fileName].some((s) => s?.toLowerCase().includes(q)));
-    } else if (view.kind === 'folder') {
-      list = list.filter((i) => i.folderId === view.id);
-    }
-    return typeFilter ? list.filter((i) => i.type === typeFilter) : list;
-  }, [items, query, view, typeFilter]);
-
-  const countIn = (id: string) => items.filter((i) => i.folderId === id).length;
-
-  const pathOf = (id: string): Folder[] => {
-    const f = folderById.get(id);
-    return f ? [...(f.parentId ? pathOf(f.parentId) : []), f] : [];
-  };
-  const folderLabel = (id: string) => pathOf(id).map((f) => f.name).join(' / ');
-
-  // ---- Actions (applied on the phone, which then sends back its updated library) ----
   const attempt = useCallback(async (fn: () => Promise<unknown>) => {
     try {
       await fn();
@@ -69,13 +49,45 @@ export default function App() {
     }
   }, [toast]);
 
-  const addItem = (partial: Omit<Item, 'id' | 'createdAt' | 'folderId'>, folderId = targetFolderId) => {
-    if (!folderId) return;
-    void attempt(() => phone.saveItem({ id: uid(), createdAt: Date.now(), folderId, ...partial } as Item));
+  const folderById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
+  const childrenOf = useCallback(
+    (id: string | null) => folders.filter((f) => (id === null ? !f.parentId || !folderById.has(f.parentId) : f.parentId === id)),
+    [folders, folderById],
+  );
+  const descendants = useCallback((id: string): string[] => [id, ...folders.filter((f) => f.parentId === id).flatMap((c) => descendants(c.id))], [folders]);
+  const countIn = (id: string) => {
+    const ids = new Set(descendants(id));
+    return items.filter((i) => ids.has(i.folderId)).length;
+  };
+  const pathOf = (id: string): Folder[] => {
+    const f = folderById.get(id);
+    return f ? [...(f.parentId ? pathOf(f.parentId) : []), f] : [];
+  };
+  const folderLabel = (id: string) => pathOf(id).map((f) => f.name).join(' / ');
+
+  const current = view.kind === 'folder' ? folderById.get(view.id) : undefined;
+  const inbox = folders.find((f) => !f.parentId && f.name === 'Boîte de réception') ?? folders[0];
+  const target = current ?? inbox;
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = items;
+    if (q) list = list.filter((i) => [i.title, i.text, i.url, i.fileName].some((v) => v?.toLowerCase().includes(q)));
+    else if (view.kind === 'folder') list = list.filter((i) => i.folderId === view.id);
+    else if (view.kind === 'media') list = list.filter(isMedia);
+    return filter === 'all' || view.kind === 'media' ? list : list.filter((i) => i.type === filter);
+  }, [items, query, view, filter]);
+
+  const go = (v: View) => {
+    setView(v);
+    setQuery('');
+    setFilter('all');
+    setMenuOpen(false);
   };
 
-  const [sending, setSending] = useState<string | null>(null);
-  const addFiles = async (files: FileList | File[], folderId = targetFolderId) => {
+  // ---- Actions: applied on the phone, which sends back its updated library ----
+
+  const addFiles = async (files: FileList | File[], folderId = target?.id) => {
     if (!folderId) return;
     const list = Array.from(files); // the input's live FileList is cleared right after
     let added = 0;
@@ -85,33 +97,31 @@ export default function App() {
         mime: file.type || 'application/octet-stream', size: file.size, createdAt: Date.now(),
       };
       const label = list.length > 1 ? `${n + 1}/${list.length} · ${file.name}` : file.name;
-      setSending(`Envoi vers le téléphone : ${label}`);
+      setSending(`Envoi vers le téléphone · ${label}`);
       const ok = await attempt(() => phone.upload(file, item, (done, total) =>
-        setSending(`Envoi vers le téléphone : ${label} · ${Math.round((done / total) * 100)} %`)));
+        setSending(`Envoi vers le téléphone · ${label} · ${Math.round((done / total) * 100)} %`)));
       if (ok) added++;
     }
     setSending(null);
-    if (added) toast(`${added} fichier(s) ajouté(s) sur ton téléphone`);
+    if (added) toast(`${added} fichier${added > 1 ? 's' : ''} enregistré${added > 1 ? 's' : ''} sur ton téléphone`);
   };
 
   const createFolder = async (parentId: string | null) => {
-    const name = prompt(parentId ? 'Nom du sous-dossier' : 'Nom du dossier (sujet)');
+    const name = prompt(parentId ? 'Nom du sous-dossier' : 'Nom du dossier');
     if (!name?.trim()) return;
     const f: Folder = { id: uid(), name: name.trim(), parentId, icon: 'folder:violet', createdAt: Date.now() };
-    if (await attempt(() => phone.saveFolder(f))) setView({ kind: 'folder', id: f.id });
-    setMenuOpen(false);
+    if (await attempt(() => phone.saveFolder(f))) go({ kind: 'folder', id: f.id });
   };
 
   const renameFolder = (f: Folder) => {
     const name = prompt('Nouveau nom', f.name);
-    if (name?.trim()) void attempt(() => phone.saveFolder({ ...f, name: name.trim() }));
+    if (name?.trim() && name.trim() !== f.name) void attempt(() => phone.saveFolder({ ...f, name: name.trim() }));
   };
 
   const deleteFolder = async (f: Folder) => {
-    const ids = descendants(f.id);
-    const n = items.filter((i) => ids.includes(i.folderId)).length;
-    if (!confirm(`Supprimer « ${f.name} », ses sous-dossiers et ${n} élément(s) ? Ils seront supprimés de ton téléphone.`)) return;
-    if (await attempt(() => phone.deleteFolder(f.id))) setView({ kind: 'all' });
+    const n = countIn(f.id);
+    if (!confirm(`Supprimer « ${f.name} », ses sous-dossiers et ${n} élément${n > 1 ? 's' : ''} ?\nIls seront supprimés de ton téléphone.`)) return;
+    if (await attempt(() => phone.deleteFolder(f.id))) go({ kind: 'home' });
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -119,125 +129,190 @@ export default function App() {
     setDragging(false);
     if (e.dataTransfer.files.length) return void addFiles(e.dataTransfer.files);
     const url = normalizeUrl(e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain'));
-    if (url) addItem({ type: 'link', url, title: hostOf(url) });
+    if (url && target) void attempt(() => phone.saveItem({ id: uid(), folderId: target.id, type: 'link', url, title: hostOf(url), createdAt: Date.now() }));
   };
 
-  const title =
-    query.trim() ? `Résultats pour « ${query.trim()} »`
-    : currentFolder ? `${glyph(currentFolder.icon)} ${currentFolder.name}`
-    : 'Tout';
+  // ---- Layout ----
+
+  const roots = childrenOf(null);
+  const subs = current ? childrenOf(current.id) : [];
+  const title = query.trim() ? 'Recherche' : view.kind === 'media' ? 'Médias' : current ? current.name : 'Mon Coffre';
+  const subtitle = query.trim()
+    ? `${visible.length} résultat${visible.length > 1 ? 's' : ''} pour « ${query.trim()} »`
+    : view.kind === 'media' ? `${visible.length} photo${visible.length > 1 ? 's' : ''} et vidéo${visible.length > 1 ? 's' : ''}`
+    : current ? (current.parentId ? folderLabel(current.id) : `${countIn(current.id)} élément${countIn(current.id) > 1 ? 's' : ''}`)
+    : `${items.length} élément${items.length > 1 ? 's' : ''} · enregistrés sur ton téléphone`;
+  const usage = st.usage;
+  const phoneUsed = usage && usage.totalBytes ? Math.min(100, ((usage.totalBytes - usage.freeBytes) / usage.totalBytes) * 100) : 0;
+  const coffreUsed = usage && usage.totalBytes ? Math.max(1, (usage.usedBytes / usage.totalBytes) * 100) : 0;
 
   return (
     <div className="app">
       <aside className={`sidebar${menuOpen ? ' open' : ''}`}>
-        <div className="brand">
-          <img src="/favicon.svg" alt="" width={28} height={28} /> Coffre
-        </div>
-        <nav>
-          <NavRow active={view.kind === 'all' && !query} icon="🗂️" label="Tout" count={items.length}
-            onClick={() => { setView({ kind: 'all' }); setQuery(''); setMenuOpen(false); }} />
+        <div className="logo"><img src="/logo-mark.png" alt="" width={28} height={28} /> Coffre</div>
+
+        <nav className="nav">
+          <NavRow icon="house" label="Accueil" active={view.kind === 'home' && !query} onClick={() => go({ kind: 'home' })} count={items.length} />
+          <NavRow icon="images" label="Médias" active={view.kind === 'media' && !query} onClick={() => go({ kind: 'media' })} count={items.filter(isMedia).length} />
         </nav>
-        <div className="side-title">
+
+        <div className="side-label">
           <span>Dossiers</span>
-          <button className="icon-btn" onClick={() => createFolder(null)} title="Nouveau dossier">＋</button>
+          <button className="icon-btn" onClick={() => createFolder(null)} title="Nouveau dossier" aria-label="Nouveau dossier"><Icon name="plus" size={17} /></button>
         </div>
-        <FolderTree
-          parentId={null} depth={0} childrenOf={childrenOf} countIn={countIn}
-          activeId={view.kind === 'folder' && !query ? view.id : null}
-          onSelect={(id) => { setView({ kind: 'folder', id }); setQuery(''); setMenuOpen(false); }}
-        />
-        <Tools st={st} toast={toast} targetFolder={currentFolder?.id ?? null} />
-      </aside>
-      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
+        <nav className="nav tree">
+          <FolderTree parentId={null} depth={0} childrenOf={childrenOf} countIn={countIn}
+            activeId={view.kind === 'folder' && !query ? view.id : null} onSelect={(id) => go({ kind: 'folder', id })} />
+        </nav>
 
-      <main
-        className={`main${dragging ? ' dragging' : ''}`}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
-        onDrop={onDrop}
-      >
-        {st.status === 'offline' && (
-          <div className="banner">Ton téléphone est hors ligne. Ouvre Coffre sur ton téléphone (avec internet) pour voir et modifier ton Coffre.</div>
-        )}
-        <header className="topbar">
-          <button className="icon-btn menu-btn" onClick={() => setMenuOpen(true)} aria-label="Menu">☰</button>
-          <input className="search" type="search" placeholder="Rechercher partout…" value={query}
-            onChange={(e) => setQuery(e.target.value)} />
-        </header>
-
-        {currentFolder && !query && (
-          <div className="crumbs">
-            {pathOf(currentFolder.id).map((f, idx, arr) => (
-              <span key={f.id}>
-                <button className="link-btn" onClick={() => setView({ kind: 'folder', id: f.id })}>{f.name}</button>
-                {idx < arr.length - 1 && ' / '}
-              </span>
-            ))}
+        <div className="side-foot">
+          <div className="device">
+            <span className="device-icon"><Icon name="smartphone" size={18} /></span>
+            <div className="grow">
+              <div className="device-name">{st.phone || 'Téléphone'} <span className={`dot${st.status === 'online' ? ' on' : ''}`} /></div>
+              <div className="muted small">{st.status === 'online' ? 'Connecté · chiffré de bout en bout' : 'Hors ligne'}</div>
+            </div>
           </div>
-        )}
-
-        <div className="head">
-          <h1>{title}</h1>
-          {currentFolder && !query && (
-            <div className="head-actions">
-              <button className="btn-ghost" onClick={() => createFolder(currentFolder.id)}>＋ Sous-dossier</button>
-              <button className="btn-ghost" onClick={() => renameFolder(currentFolder)}>Renommer</button>
-              <button className="btn-ghost danger" onClick={() => deleteFolder(currentFolder)}>Supprimer</button>
+          {usage && (
+            <div className="storage">
+              <div className="bar"><span style={{ width: `${coffreUsed}%` }} className="fill" /><span style={{ width: `${Math.max(0, phoneUsed - coffreUsed)}%` }} className="fill other" /></div>
+              <div className="muted small">{formatSize(usage.usedBytes)} dans Coffre{usage.totalBytes ? ` · ${formatSize(usage.freeBytes)} libres` : ''}</div>
             </div>
           )}
-        </div>
-
-        {currentFolder && !query && childrenOf(currentFolder.id).length > 0 && (
-          <div className="subfolders">
-            {childrenOf(currentFolder.id).map((f) => (
-              <button key={f.id} className="subfolder" onClick={() => setView({ kind: 'folder', id: f.id })}>
-                <span>{glyph(f.icon)}</span> {f.name} <span className="meta">{countIn(f.id)}</span>
+          <button className="side-btn" onClick={() => bookmarksRef.current?.click()}><Icon name="bookmark" size={17} /> Importer les favoris du navigateur</button>
+          <div className="segmented" role="radiogroup" aria-label="Thème">
+            {THEMES.map(([p, icon, label]) => (
+              <button key={p} role="radio" aria-checked={theme === p} className={theme === p ? 'on' : ''} title={label} onClick={() => setThemePref(p)}>
+                <Icon name={icon} size={16} /> {label}
               </button>
             ))}
           </div>
-        )}
-
-        {!query && (
-          <Composer
-            defaultMode="link"
-            folderName={currentFolder ? currentFolder.name : folderById.get(targetFolderId ?? '')?.name ?? ''}
-            onAdd={(p) => addItem(p)}
-            onFiles={(f) => addFiles(f)}
-          />
-        )}
-
-        <div className="filters">
-          {[null, 'link', 'note', 'file'].map((t) => (
-            <button key={t ?? 'all'} className={`filter${typeFilter === t ? ' on' : ''}`}
-              onClick={() => setTypeFilter(t as ItemType | null)}>
-              {t ? TYPE_LABELS[t as ItemType] : 'Tous'}
-            </button>
-          ))}
+          <button className="side-btn danger" onClick={() => {
+            if (confirm('Déconnecter ce navigateur ?\nTon Coffre reste sur ton téléphone ; tu pourras te reconnecter en scannant un QR code.')) void phone.forget();
+          }}><Icon name="log-out" size={17} /> Déconnecter ce navigateur</button>
         </div>
+      </aside>
+      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
 
-        {visible.length === 0 ? (
-          <div className="empty">
-            <p>Rien ici pour l'instant.</p>
-            <p className="meta">Colle un lien, écris une note ou glisse des fichiers dans cette page : ils sont enregistrés sur ton téléphone.</p>
+      <main className={`main${dragging ? ' dragging' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
+        onDrop={onDrop}>
+        <div className="content">
+          {st.status === 'offline' && (
+            <div className="banner"><Icon name="smartphone" size={18} /> Ton téléphone est hors ligne. Ouvre Coffre dessus (avec internet) pour voir et modifier ton Coffre.</div>
+          )}
+
+          <div className="topbar">
+            <button className="icon-btn menu-btn" onClick={() => setMenuOpen(true)} aria-label="Menu"><Icon name="menu" /></button>
+            <label className="search">
+              <Icon name="search" size={18} />
+              <input type="search" placeholder="Rechercher dans tes dossiers" value={query} onChange={(e) => setQuery(e.target.value)} />
+            </label>
           </div>
-        ) : (
-          <div className="grid">
-            {visible.map((i) => (
-              <Card key={i.id} item={i}
-                folderLabel={view.kind === 'folder' && !query ? undefined : folderLabel(i.folderId)}
-                onEdit={() => setEditing(i)} />
-            ))}
-          </div>
-        )}
-        {dragging && <div className="drop-hint">Dépose ici pour ajouter à « {folderById.get(targetFolderId ?? '')?.name} »</div>}
+
+          {current && current.parentId && !query && (
+            <div className="crumbs">
+              {pathOf(current.id).slice(0, -1).map((f) => (
+                <button key={f.id} className="text-btn muted" onClick={() => go({ kind: 'folder', id: f.id })}>{f.name} <Icon name="chevron-right" size={14} /></button>
+              ))}
+            </div>
+          )}
+
+          <header className="page-head">
+            {current && !query && <IconTile icon={current.icon} size={48} />}
+            <div className="grow">
+              <h1>{title}</h1>
+              <p className="muted">{subtitle}</p>
+            </div>
+            {current && !query && (
+              <div className="head-actions">
+                <button className="ghost" onClick={() => createFolder(current.id)}><Icon name="folder-plus" size={17} /> Sous-dossier</button>
+                <button className="ghost" onClick={() => setIconFor(current)}><Icon name="palette" size={17} /> Icône</button>
+                <button className="ghost" onClick={() => renameFolder(current)}><Icon name="pencil" size={17} /> Renommer</button>
+                <button className="ghost danger" onClick={() => deleteFolder(current)} title="Supprimer le dossier" aria-label="Supprimer le dossier"><Icon name="trash" size={17} /></button>
+              </div>
+            )}
+          </header>
+
+          {!query && view.kind !== 'media' && (
+            <div className="pills">
+              {QUICK.map(([kind, icon, label]) => (
+                <button key={kind} className="pill" onClick={() => setAdding(kind)}><Icon name={icon} size={17} /> {label}</button>
+              ))}
+            </div>
+          )}
+
+          {!query && view.kind === 'home' && (
+            <>
+              <SectionLabel right={<button className="text-btn" onClick={() => createFolder(null)}>Nouveau</button>}>Dossiers</SectionLabel>
+              <div className="folders">
+                {roots.map((f) => <FolderCard key={f.id} folder={f} count={countIn(f.id)} subs={childrenOf(f.id).length} onClick={() => go({ kind: 'folder', id: f.id })} />)}
+              </div>
+            </>
+          )}
+
+          {!query && subs.length > 0 && (
+            <>
+              <SectionLabel>Sous-dossiers</SectionLabel>
+              <div className="folders">
+                {subs.map((f) => <FolderCard key={f.id} folder={f} count={countIn(f.id)} subs={childrenOf(f.id).length} onClick={() => go({ kind: 'folder', id: f.id })} />)}
+              </div>
+            </>
+          )}
+
+          {view.kind === 'media' && !query ? (
+            visible.length ? (
+              <div className="media-grid">{visible.map((i) => <MediaTile key={i.id} item={i} onOpen={() => setOpen(i)} />)}</div>
+            ) : <Empty title="Aucune photo ni vidéo" hint="Ajoute-en depuis l’app, ou glisse-les dans cette page." />
+          ) : (
+            <>
+              <SectionLabel right={
+                <div className="tabs">
+                  {FILTERS.map(([f, label]) => <button key={f} className={filter === f ? 'on' : ''} onClick={() => setFilter(f)}>{label}</button>)}
+                </div>
+              }>{view.kind === 'home' && !query ? 'Récents' : 'Éléments'}</SectionLabel>
+              {visible.length ? (
+                <div className="rows">
+                  {visible.map((i) => <ItemRow key={i.id} item={i} folderLabel={view.kind === 'folder' && !query ? undefined : folderLabel(i.folderId)} onOpen={() => setOpen(i)} />)}
+                </div>
+              ) : (
+                <Empty title={query ? 'Aucun résultat' : 'Rien ici pour l’instant'}
+                  hint={query ? undefined : 'Ajoute un lien, une note ou un vocal, ou glisse des fichiers dans cette page : tout est enregistré sur ton téléphone.'} />
+              )}
+            </>
+          )}
+        </div>
+        {dragging && target && <div className="drop-hint"><Icon name="upload" size={28} /> Dépose ici pour ajouter à « {target.name} »</div>}
       </main>
 
-      {editing && (
-        <EditDialog item={editing} folders={folders} folderLabel={folderLabel}
-          onClose={() => setEditing(null)}
-          onSave={async (it) => { if (await attempt(() => phone.saveItem(it))) setEditing(null); }}
-          onDelete={async (it) => { if (await attempt(() => phone.deleteItem(it.id))) setEditing(null); }} />
+      {open && (
+        <ItemDialog item={items.find((i) => i.id === open.id) ?? open} folders={folders} folderLabel={folderLabel} onClose={() => setOpen(null)}
+          onSave={async (it) => { if (await attempt(() => phone.saveItem(it))) setOpen(null); }}
+          onDelete={async (it) => { if (await attempt(() => phone.deleteItem(it.id))) setOpen(null); }} />
       )}
+      {adding && target && (
+        <AddDialog kind={adding} folders={folders} folderLabel={folderLabel} defaultFolder={target.id} onClose={() => setAdding(null)}
+          onSave={async (item) => { if (await attempt(() => phone.saveItem(item))) setAdding(null); }}
+          onFiles={(files, folderId) => { setAdding(null); void addFiles(files, folderId); }} />
+      )}
+      {iconFor && (
+        <FolderIconDialog folder={iconFor} onClose={() => setIconFor(null)}
+          onSave={async (icon) => { if (await attempt(() => phone.saveFolder({ ...iconFor, icon }))) setIconFor(null); }} />
+      )}
+
+      <input ref={bookmarksRef} type="file" accept=".html,.htm" hidden onChange={async (e) => {
+        const f = e.target.files?.[0];
+        e.target.value = '';
+        if (!f) return;
+        try {
+          const { folders: fs, items: its } = await parseBookmarks(f, null);
+          await phone.saveMany(fs, its);
+          toast(`${its.length} favori${its.length > 1 ? 's' : ''} importé${its.length > 1 ? 's' : ''}`);
+        } catch (err) {
+          toast((err as Error).message);
+        }
+      }} />
 
       <div className="toasts">
         {sending && <div className="toast">{sending}</div>}
@@ -247,10 +322,10 @@ export default function App() {
   );
 }
 
-function NavRow(p: { active: boolean; icon: string; label: string; count: number; onClick: () => void }) {
+function NavRow(p: { icon: IconName; label: string; active: boolean; count?: number; onClick: () => void }) {
   return (
     <button className={`nav-row${p.active ? ' active' : ''}`} onClick={p.onClick}>
-      <span>{p.icon}</span><span className="grow">{p.label}</span><span className="meta">{p.count || ''}</span>
+      <Icon name={p.icon} size={19} /><span className="grow">{p.label}</span><span className="count">{p.count || ''}</span>
     </button>
   );
 }
@@ -263,164 +338,38 @@ function FolderTree(p: {
     <>
       {p.childrenOf(p.parentId).map((f) => (
         <div key={f.id}>
-          <button className={`nav-row${p.activeId === f.id ? ' active' : ''}`} style={{ paddingLeft: 12 + p.depth * 16 }}
-            onClick={() => p.onSelect(f.id)}>
-            <span>{glyph(f.icon)}</span><span className="grow">{f.name}</span><span className="meta">{p.countIn(f.id) || ''}</span>
+          <button className={`nav-row${p.activeId === f.id ? ' active' : ''}`} style={{ paddingLeft: 10 + p.depth * 18 }} onClick={() => p.onSelect(f.id)}>
+            <IconTile icon={f.icon} size={26} /><span className="grow ellipsis">{f.name}</span><span className="count">{p.countIn(f.id) || ''}</span>
           </button>
-          <FolderTree {...p} parentId={f.id} depth={p.depth + 1} />
+          {p.depth < 6 && <FolderTree {...p} parentId={f.id} depth={p.depth + 1} />}
         </div>
       ))}
     </>
   );
 }
 
-function Composer(p: {
-  defaultMode: Mode; folderName: string;
-  onAdd: (item: Omit<Item, 'id' | 'createdAt' | 'folderId'>) => void; onFiles: (f: FileList | File[]) => void;
-}) {
-  const [mode, setMode] = useState<Mode>(p.defaultMode);
-  const [main, setMain] = useState('');
-  const [extra, setExtra] = useState('');
-  const [error, setError] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const reset = () => { setMain(''); setExtra(''); setError(''); };
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (mode === 'link') {
-      const url = normalizeUrl(main);
-      if (!url) return setError('Lien invalide');
-      p.onAdd({ type: 'link', url, title: extra.trim() || hostOf(url) });
-    } else if (mode === 'note') {
-      if (!main.trim() && !extra.trim()) return;
-      p.onAdd({ type: 'note', title: main.trim() || extra.trim().split('\n')[0].slice(0, 60), text: extra.trim() });
-    }
-    reset();
-  };
-
-  const tabs: [Mode, string][] = [
-    ['link', 'Lien'], ['note', 'Note'], ['voice', 'Vocal'], ['file', 'Fichier'],
-  ];
-
+function FolderCard({ folder, count, subs, onClick }: { folder: Folder; count: number; subs: number; onClick: () => void }) {
   return (
-    <form className="composer" onSubmit={submit}>
-      <div className="tabs">
-        {tabs.map(([m, label]) => (
-          <button type="button" key={m} className={`tab${mode === m ? ' on' : ''}`} onClick={() => { setMode(m); setError(''); }}>
-            {label}
-          </button>
-        ))}
-        <span className="meta into">→ {p.folderName}</span>
-      </div>
-
-      {mode === 'link' && (
-        <div className="fields">
-          <input autoFocus placeholder="Colle un lien : reel Instagram, vidéo Facebook, YouTube, article…" value={main}
-            onChange={(e) => { setMain(e.target.value); setError(''); }} />
-          <input placeholder="Titre (optionnel)" value={extra} onChange={(e) => setExtra(e.target.value)} />
-        </div>
-      )}
-      {mode === 'note' && (
-        <div className="fields col">
-          <input placeholder="Titre" value={main} onChange={(e) => setMain(e.target.value)} />
-          <textarea placeholder="Écris ton idée…" rows={3} value={extra} onChange={(e) => setExtra(e.target.value)} />
-        </div>
-      )}
-      {mode === 'voice' && <Recorder onSave={(f) => p.onFiles([f])} />}
-      {mode === 'file' && (
-        <div className="fields">
-          <button type="button" className="dropzone" onClick={() => fileRef.current?.click()}>
-            Choisir des documents, images ou vidéos — ou glisse-les dans la page
-          </button>
-          <input ref={fileRef} type="file" multiple hidden
-            onChange={(e) => { if (e.target.files?.length) p.onFiles(e.target.files); e.target.value = ''; }} />
-        </div>
-      )}
-      {mode !== 'file' && mode !== 'voice' && (
-        <div className="composer-foot">
-          {error && <span className="error">{error}</span>}
-          <button className="btn-primary" type="submit">Ajouter</button>
-        </div>
-      )}
-    </form>
+    <button className="folder-card" onClick={onClick}>
+      <IconTile icon={folder.icon} size={42} />
+      <span className="grow">
+        <span className="folder-name ellipsis">{folder.name}</span>
+        <span className="muted small">{count} élément{count > 1 ? 's' : ''}{subs ? ` · ${subs} sous-dossier${subs > 1 ? 's' : ''}` : ''}</span>
+      </span>
+      <Icon name="chevron-right" size={18} className="muted" />
+    </button>
   );
 }
 
-function EditDialog(p: {
-  item: Item; folders: Folder[]; folderLabel: (id: string) => string;
-  onClose: () => void; onSave: (i: Item) => void; onDelete: (i: Item) => void;
-}) {
-  const [it, setIt] = useState<Item>(p.item);
-  const set = (patch: Partial<Item>) => setIt((x) => ({ ...x, ...patch }));
-
-  const save = (e: React.FormEvent) => {
-    e.preventDefault();
-    const url = it.type === 'link' ? normalizeUrl(it.url ?? '') : undefined;
-    if (it.type === 'link' && !url) return;
-    p.onSave({ ...it, ...(url ? { url } : {}) });
-  };
-
-  return (
-    <div className="modal-bg" onClick={p.onClose}>
-      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={save}>
-        <h2>Modifier</h2>
-        <label>Titre<input value={it.title} onChange={(e) => set({ title: e.target.value })} /></label>
-        {it.type === 'link' && <label>Lien<input value={it.url} onChange={(e) => set({ url: e.target.value })} /></label>}
-        {it.type !== 'file' && (
-          <label>{it.type === 'note' ? 'Texte' : 'Notes'}
-            <textarea rows={it.type === 'note' ? 6 : 3} value={it.text ?? ''} onChange={(e) => set({ text: e.target.value })} />
-          </label>
-        )}
-        <label>Dossier
-          <select value={it.folderId} onChange={(e) => set({ folderId: e.target.value })}>
-            {p.folders.map((f) => <option key={f.id} value={f.id}>{p.folderLabel(f.id)}</option>)}
-          </select>
-        </label>
-        <div className="modal-actions">
-          <button type="button" className="btn-ghost danger"
-            onClick={() => confirm('Supprimer cet élément ?') && p.onDelete(it)}>Supprimer</button>
-          <span className="grow" />
-          <button type="button" className="btn-ghost" onClick={p.onClose}>Annuler</button>
-          <button className="btn-primary" type="submit">Enregistrer</button>
-        </div>
-      </form>
-    </div>
-  );
+function SectionLabel({ children, right }: { children: string; right?: React.ReactNode }) {
+  return <div className="section-label"><span>{children}</span>{right}</div>;
 }
 
-function Tools(p: { st: PhoneState; toast: (t: string) => void; targetFolder: string | null }) {
-  const bookmarksRef = useRef<HTMLInputElement>(null);
-  const { usage } = p.st;
-
+function Empty({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="tools">
-      <button className="btn-ghost small" onClick={() => bookmarksRef.current?.click()}>Importer les favoris du navigateur</button>
-      <div className="usage">
-        <div className="usage-head">
-          <span>📱 {p.st.phone || 'Téléphone'}</span>
-          <span className={`dot ${p.st.status === 'online' ? 'on' : ''}`} title={p.st.status === 'online' ? 'Connecté' : 'Hors ligne'} />
-        </div>
-        {usage && (
-          <span className="meta">{formatSize(usage.usedBytes)} dans Coffre{usage.totalBytes ? ` · ${formatSize(usage.freeBytes)} libres` : ''}</span>
-        )}
-        <span className="meta">Tes données restent sur ton téléphone. Chiffré de bout en bout.</span>
-      </div>
-      <button className="btn-ghost small danger" onClick={() => {
-        if (confirm('Déconnecter ce navigateur ? Ton Coffre reste sur ton téléphone ; tu pourras te reconnecter en scannant un QR code.')) void phone.forget();
-      }}>Déconnecter ce navigateur</button>
-      <input ref={bookmarksRef} type="file" accept=".html,.htm" hidden onChange={async (e) => {
-        const f = e.target.files?.[0];
-        e.target.value = '';
-        if (!f) return;
-        try {
-          const { folders, items } = await parseBookmarks(f, p.targetFolder);
-          await phone.saveMany(folders, items);
-          p.toast(`${items.length} favori(s) importé(s)`);
-        } catch (err) {
-          p.toast((err as Error).message);
-        }
-      }} />
+    <div className="empty">
+      <p className="empty-title">{title}</p>
+      {hint && <p className="muted">{hint}</p>}
     </div>
   );
 }
