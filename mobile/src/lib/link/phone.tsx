@@ -1,5 +1,5 @@
 // Coffre Web, phone side: the phone serves its library to the websites it is linked to, like WhatsApp Web.
-// Messages (website -> phone): hello, get, saveFolder, deleteFolder, saveItem, deleteItem, saveMany, up, unlink.
+// Messages (website -> phone): hello, ping, get, saveFolder, deleteFolder, saveItem, deleteItem, saveMany, up, unlink.
 // Messages (phone -> website): state, part, ok, err, alive, unlink.
 // Links are only open while the app is in the foreground.
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -66,29 +66,32 @@ interface Upload {
 class Session {
   link: Link;
   private uploads = new Map<string, Upload>();
-  private alive?: ReturnType<typeof setInterval>;
+  /** Last time the website said something: library changes are only pushed while it is around. */
+  private heardAt = 0;
 
   constructor(public device: Device, private events: { seen: (id: string, name?: string) => void; unlinked: (id: string) => void }) {
     this.link = new Link({
       client: supabase, channelId: device.id, side: 'p', random, key: fromB64(device.key),
-      onMessage: (h, body) => void this.handle(h, body).catch((e) => this.reply(h, e)),
+      onMessage: (h, body) => {
+        this.heardAt = Date.now();
+        void this.handle(h, body).catch((e) => this.reply(h, e));
+      },
     });
   }
 
   open() {
     this.link.open();
-    void this.sendState();
-    this.alive = setInterval(() => void this.link.send({ t: 'alive' }).catch(() => {}), 15_000);
+    void this.sendState(true);
   }
 
   close() {
-    clearInterval(this.alive);
     this.link.close();
     for (const u of this.uploads.values()) if (u.tmp.exists) u.tmp.delete();
     this.uploads.clear();
   }
 
-  async sendState() {
+  async sendState(force = false) {
+    if (!force && Date.now() - this.heardAt > 150_000) return;
     const { folders, items } = await loadAll();
     const usage = await getUsage();
     await this.link.send({ t: 'state', folders, items, usage, phone: PHONE_NAME }).catch(() => {});
@@ -104,7 +107,9 @@ class Session {
     switch (h.t) {
       case 'hello':
         this.events.seen(this.device.id, str(h.name, 80));
-        return this.sendState();
+        return this.sendState(true);
+      case 'ping': // presence is only answered, never sent on its own (it would use up relay messages)
+        return void this.link.send({ t: 'alive' }).catch(() => {});
       case 'get':
         return this.sendFile(h);
       case 'saveFolder': {

@@ -28,7 +28,12 @@ export interface PhoneState {
 }
 
 const SAVED = 'coffre.link';
-const OFFLINE_AFTER = 40_000;
+// Presence costs relay messages, so the website only pings while its tab is visible: every 60 s when all is well,
+// every 15 s when the phone is away (to reconnect quickly), every 5 s until the first library arrives.
+const PING_EVERY = 60_000;
+const PING_EVERY_OFFLINE = 15_000;
+const PING_EVERY_LOADING = 5_000;
+const REPLY_WAIT = 20_000;
 const random = (n: number) => crypto.getRandomValues(new Uint8Array(n));
 const newId = () => toB64(random(12));
 
@@ -53,6 +58,7 @@ class Phone {
   private listeners = new Set<() => void>();
   private link: Link | null = null;
   private lastSeen = 0;
+  private pingAt = 0;
   private pending = new Map<string, Pending>();
   private downloads = new Map<string, Promise<Blob>>();
   private started = false;
@@ -80,16 +86,22 @@ class Phone {
     if (saved?.channelId && saved.key) this.connect(saved.channelId, fromB64(saved.key));
     else this.startPairing();
 
-    setInterval(() => {
-      const { status } = this.state;
-      if (status !== 'online' && status !== 'connecting' && status !== 'offline') return;
-      if (Date.now() - this.lastSeen > OFFLINE_AFTER) {
-        if (status !== 'offline') this.set({ status: 'offline' });
-        void this.hello(); // the phone answers as soon as Coffre is opened on it
-      } else if (!this.state.loaded) {
-        void this.hello(); // just linked or reconnected: ask again until the library arrives
+    const tick = () => {
+      const { status, loaded } = this.state;
+      if (!this.link?.key || status === 'pairing' || status === 'unavailable') return;
+      if (document.visibilityState !== 'visible') return; // closed or hidden tab: no traffic at all
+      const now = Date.now();
+      if (this.pingAt > this.lastSeen && now - this.pingAt > REPLY_WAIT && status !== 'offline') this.set({ status: 'offline' });
+      const every = !loaded ? PING_EVERY_LOADING : this.state.status === 'offline' ? PING_EVERY_OFFLINE : PING_EVERY;
+      if (now - this.pingAt >= every) void this.ping();
+    };
+    setInterval(tick, 5_000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        this.pingAt = 0;
+        tick();
       }
-    }, 5_000);
+    });
   }
 
   private startPairing() {
@@ -105,7 +117,7 @@ class Phone {
         localStorage.setItem(SAVED, JSON.stringify({ channelId, key: toB64(key) }));
         this.lastSeen = Date.now();
         this.set({ status: 'connecting', qr: undefined, code: fingerprint(key) });
-        void this.hello();
+        void this.ping();
       },
     });
     this.link = link;
@@ -118,11 +130,15 @@ class Phone {
     this.link.open();
     this.lastSeen = Date.now();
     this.set({ status: 'connecting' });
-    void this.hello();
+    void this.ping();
   }
 
-  private hello() {
-    return this.link?.key ? this.link.send({ t: 'hello', name: browserName() }).catch(() => {}) : Promise.resolve();
+  /** Asks the phone for its library (hello) or just whether it is there (ping). */
+  private ping() {
+    if (!this.link?.key) return Promise.resolve();
+    this.pingAt = Date.now();
+    const full = !this.state.loaded || this.state.status !== 'online';
+    return this.link.send(full ? { t: 'hello', name: browserName() } : { t: 'ping' }).catch(() => {});
   }
 
   private onMessage(h: Header, body: Uint8Array) {

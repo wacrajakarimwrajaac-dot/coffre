@@ -46,5 +46,5 @@ npm run build    # vérification des types + build de production dans dist/
 - Données sur le téléphone, sauvegarde automatique dans Google Drive façon WhatsApp (dossier « Coffre » visible), restauration
 - Coffre Web : le site affiche le Coffre du téléphone après un scan de QR code, chiffré de bout en bout
 - Import des favoris du navigateur depuis le site (fichier HTML exporté depuis Chrome/Edge/Firefox/Safari)
-- Connexion email ou « Continuer avec Google » dans l'app
+- Connexion avec Google uniquement (pas de mot de passe, pas d'email de confirmation)
 - Signalement de problèmes et suppression de compte depuis l'app

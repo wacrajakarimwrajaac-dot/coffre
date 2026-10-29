@@ -1,96 +1,51 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Linking, Platform, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 import { PRIVACY_URL } from '@/lib/appInfo';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signInWithGoogle } from '@/lib/googleAuth';
-import { supabase } from '@/lib/supabase';
 import { C } from '@/lib/theme';
 import { Logo } from './Logo';
-import { Button, Input, s } from './ui';
+import { s } from './ui';
 
+/** Google is the only way in: no passwords to keep, no confirmation emails to send. */
 export function Login() {
-  const [mode, setMode] = useState<'in' | 'up'>('in');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
-  const [withEmail, setWithEmail] = useState(false);
-
-  const submit = async () => {
-    setBusy(true);
-    setMsg(null);
-    const { data, error } =
-      mode === 'in'
-        ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        : await supabase.auth.signUp({ email: email.trim(), password });
-    setBusy(false);
-    if (error) return setMsg({ text: error.message, error: true });
-    if (mode === 'up' && !data.session) setMsg({ text: 'Compte créé. Confirme ton adresse via l’email reçu, puis connecte-toi.' });
-  };
 
   const google = async () => {
-    setMsg(null);
-    setGoogleBusy(true);
+    setError(null);
+    setBusy(true);
     try {
       await signInWithGoogle();
     } catch (e) {
-      setMsg({ text: (e as Error).message, error: true });
+      setError((e as Error).message);
     } finally {
-      setGoogleBusy(false);
+      setBusy(false);
     }
-  };
-
-  const reset = async () => {
-    if (!email.trim()) return setMsg({ text: 'Entre ton email d’abord.', error: true });
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-    setMsg(error ? { text: error.message, error: true } : { text: 'Email de réinitialisation envoyé.' });
   };
 
   return (
     <SafeAreaView style={s.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
-        <View style={{ gap: 14 }}>
-          <Logo size={44} />
-          <Text style={s.muted}>Tes liens, notes, vocaux et fichiers, rangés sur ton téléphone et sauvegardés sur ton Drive.</Text>
-          <Pressable onPress={google} disabled={googleBusy}
-            style={{ backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: C.line, paddingVertical: 13, flexDirection: 'row', justifyContent: 'center', gap: 10, opacity: googleBusy ? 0.6 : 1 }}>
-            <Text style={{ color: '#4285f4', fontWeight: '900', fontSize: 16 }}>G</Text>
-            <Text style={{ color: '#1f1f1f', fontWeight: '600', fontSize: 16 }}>{googleBusy ? 'Connexion…' : 'Continuer avec Google'}</Text>
-          </Pressable>
-          {!withEmail ? (
-            <>
-              {msg && <Text style={{ color: msg.error ? C.danger : C.muted }}>{msg.text}</Text>}
-              <Button kind="ghost" title="Continuer avec un email" onPress={() => { setWithEmail(true); setMsg(null); }} />
-              <Text style={[s.muted, { textAlign: 'center', fontSize: 12, lineHeight: 18 }]}>
-                Ensuite, pour utiliser Coffre sur ton ordinateur, ouvre le site Coffre et scanne son QR code depuis Réglages → Coffre Web.
-              </Text>
-            </>
-          ) : (
-            <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
-                <Text style={s.muted}>avec un email</Text>
-                <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
-              </View>
-              <Input placeholder="Email" autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} />
-              <Input placeholder="Mot de passe" secureTextEntry autoComplete={mode === 'in' ? 'current-password' : 'new-password'}
-                value={password} onChangeText={setPassword} />
-              {msg && <Text style={{ color: msg.error ? C.danger : C.muted }}>{msg.text}</Text>}
-              <Button title={mode === 'in' ? 'Se connecter' : 'Créer mon compte'} busy={busy}
-                disabled={!email.trim() || password.length < 6} onPress={submit} />
-              <Button kind="ghost" title={mode === 'in' ? 'Pas de compte ? Créer un compte' : 'Déjà un compte ? Se connecter'}
-                onPress={() => { setMode(mode === 'in' ? 'up' : 'in'); setMsg(null); }} />
-              {mode === 'in' && <Button kind="ghost" title="Mot de passe oublié" onPress={reset} />}
-            </>
-          )}
-          {PRIVACY_URL && (
-            <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>
-              En continuant, tu acceptes la <Text style={{ color: C.primary }} onPress={() => Linking.openURL(PRIVACY_URL)}>politique de confidentialité</Text>.
-            </Text>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 16 }}>
+        <Logo size={48} />
+        <Text style={[s.muted, { fontSize: 15, lineHeight: 22 }]}>
+          Tes liens, notes, vocaux et fichiers, rangés sur ton téléphone et sauvegardés sur ton Google Drive.
+        </Text>
+        <Pressable onPress={google} disabled={busy}
+          style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingVertical: 15, flexDirection: 'row', justifyContent: 'center', gap: 10, opacity: busy ? 0.6 : 1, marginTop: 8 }}>
+          <Text style={{ color: '#4285f4', fontWeight: '900', fontSize: 17 }}>G</Text>
+          <Text style={{ color: '#1f1f1f', fontWeight: '600', fontSize: 17 }}>{busy ? 'Connexion…' : 'Continuer avec Google'}</Text>
+        </Pressable>
+        {error && <Text style={{ color: C.danger }}>{error}</Text>}
+        <Text style={[s.muted, { textAlign: 'center', lineHeight: 18 }]}>
+          Pour utiliser Coffre sur ton ordinateur, ouvre le site Coffre et scanne son QR code depuis Réglages → Coffre Web.
+        </Text>
+        {PRIVACY_URL && (
+          <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>
+            En continuant, tu acceptes la <Text style={{ color: C.primary }} onPress={() => Linking.openURL(PRIVACY_URL)}>politique de confidentialité</Text>.
+          </Text>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
