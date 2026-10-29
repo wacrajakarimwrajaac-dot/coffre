@@ -338,3 +338,61 @@ begin
     alter publication supabase_realtime add table public.habit_checks;
   end if;
 end $$;
+
+-- ============================================================================
+-- Coffre Web (site relié au téléphone) : essai gratuit puis abonnement
+-- ============================================================================
+
+-- Abonnement de chaque compte. Écrit uniquement par le webhook de paiement (clé service_role),
+-- jamais par l'app ni par le site.
+create table if not exists public.web_subscriptions (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  status text not null default 'inactive',            -- active | cancelled | expired | inactive
+  provider text,
+  provider_customer_id text,
+  provider_subscription_id text,
+  current_period_end timestamptz,                     -- fin de la période payée
+  updated_at timestamptz not null default now()
+);
+alter table public.web_subscriptions enable row level security;
+drop policy if exists "web_subscriptions_read_own" on public.web_subscriptions;
+create policy "web_subscriptions_read_own" on public.web_subscriptions for select to authenticated
+  using (user_id = (select auth.uid()));
+
+-- L'essai gratuit commence la première fois que le compte demande son accès (site ou téléphone).
+create table if not exists public.web_trials (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  started_at timestamptz not null default now()
+);
+alter table public.web_trials enable row level security;
+
+-- Accès à Coffre Web du compte connecté : abonnement payé, sinon essai de 7 jours, sinon refusé.
+create or replace function public.web_access()
+returns table (active boolean, reason text, until timestamptz)
+language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := (select auth.uid());
+  sub public.web_subscriptions;
+  started timestamptz;
+begin
+  if uid is null then
+    return query select false, 'signed_out'::text, null::timestamptz;
+    return;
+  end if;
+
+  select s.* into sub from public.web_subscriptions s where s.user_id = uid;
+  if found and sub.status in ('active', 'cancelled') and (sub.current_period_end is null or sub.current_period_end > now()) then
+    return query select true, 'subscription'::text, sub.current_period_end;
+    return;
+  end if;
+
+  insert into public.web_trials (user_id) values (uid) on conflict (user_id) do nothing;
+  select t.started_at into started from public.web_trials t where t.user_id = uid;
+  if started + interval '7 days' > now() then
+    return query select true, 'trial'::text, started + interval '7 days';
+  else
+    return query select false, 'expired'::text, started + interval '7 days';
+  end if;
+end $$;
+revoke all on function public.web_access() from public, anon;
+grant execute on function public.web_access() to authenticated;

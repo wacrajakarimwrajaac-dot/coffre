@@ -11,35 +11,41 @@
 <main>
   <p><a href="index.html">← Coffre</a></p>
   <h1>Politique de confidentialité</h1>
-  <p class="muted">Dernière mise à jour : 24 octobre 2026</p>
+  <p class="muted">Dernière mise à jour : 29 octobre 2026</p>
 
-  <p>Coffre est une application web et mobile pour ranger des liens, notes, vocaux, photos, vidéos, documents et tâches. Cette page explique quelles données sont utilisées et pourquoi.</p>
+  <p>Coffre est une application mobile (avec un site compagnon, Coffre Web) pour ranger des liens, notes, vocaux, photos, vidéos et documents. Cette page explique quelles données sont utilisées et pourquoi.</p>
+
+  <h2>Où sont tes données</h2>
+  <p><strong>Ton contenu reste sur ton téléphone.</strong> Tes dossiers, liens, notes, vocaux, photos, vidéos et documents sont enregistrés dans l’espace privé de l’application, sur ton appareil. Nous ne les copions pas sur nos serveurs.</p>
 
   <h2>Données que nous traitons</h2>
   <ul>
-    <li><strong>Compte :</strong> ton adresse email et, si tu te connectes avec Google, ton nom et ton adresse email Google.</li>
-    <li><strong>Contenu que tu ajoutes :</strong> dossiers, liens, notes, tâches et rappels, ainsi que les fichiers que tu importes (photos, vidéos, vocaux, documents).</li>
+    <li><strong>Compte :</strong> ton adresse email et ton nom Google, reçus lorsque tu te connectes avec Google. Ils servent uniquement à créer et identifier ton compte.</li>
+    <li><strong>Abonnement Coffre Web :</strong> l’état de ton abonnement (actif ou non, date de fin) et la date de début de ton essai gratuit. Le paiement est géré par notre prestataire de paiement ; nous ne voyons ni ne conservons ton numéro de carte.</li>
+    <li><strong>Signalements :</strong> si tu envoies un signalement depuis l’application, le message et la capture d’écran éventuelle que tu joins.</li>
   </ul>
-
-  <h2>Où elles sont stockées</h2>
-  <p>Les données sont enregistrées sur l’infrastructure de Supabase (région Europe, Irlande), protégées par des règles qui limitent l’accès à ton seul compte. Les fichiers sont dans un espace privé : personne d’autre que toi ne peut les ouvrir.</p>
+  <p>Ces données sont enregistrées sur l’infrastructure de Supabase (région Europe, Irlande), protégées par des règles qui limitent l’accès à ton seul compte.</p>
 
   <h2>Connexion avec Google</h2>
-  <p>Si tu choisis « Continuer avec Google », nous recevons ton nom et ton adresse email pour créer et identifier ton compte. Nous ne les utilisons pour rien d’autre.</p>
+  <p>La connexion se fait uniquement avec Google. Nous recevons ton nom et ton adresse email pour créer et identifier ton compte. Nous ne les utilisons pour rien d’autre.</p>
+
+  <h2>Coffre Web (site sur ordinateur)</h2>
+  <p>Coffre Web affiche le contenu de ton téléphone sur ton ordinateur après que tu as scanné un QR code avec l’application. Les échanges entre ton téléphone et ton navigateur sont <strong>chiffrés de bout en bout</strong> : ils transitent par un relais (Supabase Realtime) qui ne voit que des données illisibles et ne les conserve pas. Les fichiers que tu ouvres sur le site sont gardés dans le cache de ton navigateur jusqu’à ce que tu déconnectes l’appareil. Tu peux déconnecter un navigateur à tout moment depuis l’application (Réglages, Coffre Web) ou depuis le site.</p>
 
   <h2>Sauvegarde Google Drive</h2>
-  <p>Si tu actives la sauvegarde, Coffre demande l’autorisation « <code>https://www.googleapis.com/auth/drive.file</code> ». Elle permet à Coffre de créer un dossier « Coffre » dans ton Google Drive et d’y copier tes dossiers, notes, liens, tâches et fichiers. Coffre ne peut <strong>pas</strong> lire, modifier ni supprimer les autres fichiers de ton Drive.</p>
+  <p>Si tu actives la sauvegarde, Coffre demande l’autorisation « <code>https://www.googleapis.com/auth/drive.file</code> ». Elle permet à Coffre de créer un dossier « Coffre » dans ton Google Drive et d’y copier tes dossiers, notes, liens et fichiers. Coffre ne peut <strong>pas</strong> lire, modifier ni supprimer les autres fichiers de ton Drive.</p>
   <p>Les données obtenues via les API Google sont utilisées uniquement pour fournir cette sauvegarde et cette restauration. Elles ne sont ni vendues, ni partagées avec des tiers, ni utilisées pour de la publicité ou pour entraîner des modèles d’intelligence artificielle. L’utilisation par Coffre des informations reçues des API Google respecte la <a href="https://developers.google.com/terms/api-services-user-data-policy#limited-use">politique relative aux données utilisateur des services API Google</a>, y compris les exigences d’utilisation limitée.</p>
   <p>Tu peux désactiver la sauvegarde à tout moment dans l’application, et retirer l’accès de Coffre depuis <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. Les fichiers déjà copiés dans ton Drive t’appartiennent : tu peux les supprimer toi-même.</p>
 
-  <h2>Partage et publicité</h2>
-  <p>Nous ne vendons pas tes données, ne les partageons pas avec des annonceurs et n’affichons pas de publicité.</p>
+  <h2>Publicité</h2>
+  <p>L’application mobile affiche des publicités fournies par <strong>Google AdMob</strong>. Pour cela, Google peut utiliser l’identifiant publicitaire de ton appareil et des données techniques (appareil, adresse IP approximative) afin de choisir et mesurer les annonces. Dans les pays où la loi l’exige (Espace économique européen, Royaume-Uni), l’application te demande ton consentement avant d’afficher des annonces. Tu peux réinitialiser ou désactiver l’identifiant publicitaire dans les paramètres de ton téléphone. Pour en savoir plus : <a href="https://policies.google.com/technologies/ads">comment Google utilise les données pour les annonces</a>.</p>
+  <p>Ton contenu (liens, notes, fichiers) n’est jamais transmis aux annonceurs. Nous ne vendons pas tes données.</p>
 
-  <h2>Notifications et micro</h2>
-  <p>L’application mobile demande l’accès au micro (pour enregistrer des vocaux), à la galerie ou à l’appareil photo (pour ajouter des photos et vidéos) et aux notifications (pour tes rappels). Chaque accès est utilisé uniquement pour la fonction correspondante.</p>
+  <h2>Permissions de l’application</h2>
+  <p>L’application demande l’accès au micro (pour enregistrer des vocaux), à la galerie (pour ajouter des photos et vidéos) et à la caméra (uniquement pour scanner le QR code de Coffre Web). Chaque accès est utilisé uniquement pour la fonction correspondante.</p>
 
   <h2>Conservation et suppression</h2>
-  <p>Tes données sont conservées tant que ton compte existe. Tu peux supprimer des éléments à tout moment dans l’application. Pour supprimer ton compte et toutes les données associées, écris-nous à l’adresse ci-dessous : nous le faisons dans un délai raisonnable.</p>
+  <p>Ton contenu reste sur ton téléphone tant que tu ne le supprimes pas ou que tu ne désinstalles pas l’application. Tu peux supprimer ton compte depuis l’application (Réglages, Supprimer mon compte) : ton compte, ton abonnement enregistré et les données stockées sur ton téléphone par Coffre sont alors supprimés. Les copies déjà présentes dans ton Google Drive t’appartiennent.</p>
 
   <h2>Contact</h2>
   <p>Pour toute question ou demande sur tes données : <a href="mailto:CONTACT_EMAIL">CONTACT_EMAIL</a>.</p>

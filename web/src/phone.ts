@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import { cacheClear, cacheDelete, cacheGet, cacheKeys, cachePut, type Folder, type Item } from './db';
 import { fingerprint, keyPair, Link, PART, qrText, sharedKey, toB64, fromB64, type Header, type KeyPair } from './link/protocol';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 export type Status = 'unavailable' | 'pairing' | 'connecting' | 'online' | 'offline';
@@ -28,6 +29,15 @@ export interface PhoneState {
 }
 
 const SAVED = 'coffre.link';
+
+/** The relay only carries sealed messages, so it uses its own anonymous connection, apart from the signed-in account. */
+let relayClient: SupabaseClient | null = null;
+function relay(): SupabaseClient {
+  relayClient ??= createClient(import.meta.env.VITE_SUPABASE_URL as string, import.meta.env.VITE_SUPABASE_ANON_KEY as string, {
+    auth: { storageKey: 'coffre-relay', persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  return relayClient;
+}
 // Presence costs relay messages, so the website only pings while its tab is visible: every 60 s when all is well,
 // every 15 s when the phone is away (to reconnect quickly), every 5 s until the first library arrives.
 const PING_EVERY = 60_000;
@@ -108,7 +118,7 @@ class Phone {
     const channelId = newId() + newId();
     const kp: KeyPair = keyPair(random);
     const link = new Link({
-      client: supabase!, channelId, side: 'w', random, key: null,
+      client: relay(), channelId, side: 'w', random, key: null,
       onMessage: (h, body) => this.onMessage(h, body),
       onPair: (phonePublic) => {
         if (link.key) return; // first phone wins
@@ -126,7 +136,7 @@ class Phone {
   }
 
   private connect(channelId: string, key: Uint8Array) {
-    this.link = new Link({ client: supabase!, channelId, side: 'w', random, key, onMessage: (h, body) => this.onMessage(h, body) });
+    this.link = new Link({ client: relay(), channelId, side: 'w', random, key, onMessage: (h, body) => this.onMessage(h, body) });
     this.link.open();
     this.lastSeen = Date.now();
     this.set({ status: 'connecting' });

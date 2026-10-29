@@ -12,6 +12,7 @@ import {
   type Folder, type Item,
 } from '../data';
 import { supabase } from '../supabase';
+import { checkWebAccess, type WebAccess } from './access';
 import { fingerprint, fromB64, keyPair, Link, parseQr, PART, sharedKey, toB64, type Header } from './protocol';
 
 export interface Device {
@@ -214,6 +215,10 @@ class Session {
 
 interface LinkCtx {
   devices: Device[];
+  /** Whether Coffre Web may run for this account (null while checking). */
+  access: WebAccess | null;
+  /** Asks the server again (e.g. when the Coffre Web screen opens). */
+  refreshAccess: () => Promise<WebAccess>;
   /** Links this phone to the website that shows `qr`; returns the check code shown on both screens. */
   pair: (qr: string) => Promise<string>;
   unlink: (id: string) => Promise<void>;
@@ -223,6 +228,8 @@ const Ctx = createContext<LinkCtx | null>(null);
 
 export function LinkProvider({ userId, children }: { userId: string; children: ReactNode }) {
   const [devices, setDevices] = useState<Device[]>([]);
+  const [access, setAccess] = useState<WebAccess | null>(null);
+  const accessRef = useRef<WebAccess | null>(null);
   const devicesRef = useRef<Device[]>([]);
   const sessions = useRef(new Map<string, Session>());
 
@@ -245,7 +252,7 @@ export function LinkProvider({ userId, children }: { userId: string; children: R
   }), [persist, remove]);
 
   const start = useCallback((d: Device) => {
-    if (sessions.current.has(d.id)) return;
+    if (sessions.current.has(d.id) || !accessRef.current?.active) return;
     const s = new Session(d, sessionEvents);
     sessions.current.set(d.id, s);
     s.open();
@@ -256,18 +263,27 @@ export function LinkProvider({ userId, children }: { userId: string; children: R
     sessions.current.clear();
   }, []);
 
-  // Load the linked websites, connect while the app is in the foreground.
+  // Checks the account's access (server, or last answer), then connects the linked websites while the app is in the foreground.
+  const refreshAccess = useCallback(async () => {
+    const a = await checkWebAccess(userId);
+    accessRef.current = a;
+    setAccess(a);
+    if (a.active) devicesRef.current.forEach(start);
+    else stopAll();
+    return a;
+  }, [userId, start, stopAll]);
+
   useEffect(() => {
     let alive = true;
-    AsyncStorage.getItem(storageKey(userId)).then((raw) => {
+    AsyncStorage.getItem(storageKey(userId)).then(async (raw) => {
       if (!alive) return;
       const list = (JSON.parse(raw ?? '[]') as Device[]).filter((d) => d?.id && d?.key);
       devicesRef.current = list;
       setDevices(list);
-      if (AppState.currentState === 'active') list.forEach(start);
+      if (list.length && AppState.currentState === 'active') await refreshAccess();
     }).catch(() => {});
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') devicesRef.current.forEach(start);
+      if (state === 'active') void refreshAccess();
       else if (state === 'background') stopAll();
     });
     return () => {
@@ -275,7 +291,7 @@ export function LinkProvider({ userId, children }: { userId: string; children: R
       sub.remove();
       stopAll();
     };
-  }, [userId, start, stopAll]);
+  }, [userId, refreshAccess, stopAll]);
 
   // Push every change of the library to the linked websites.
   useEffect(() => {
@@ -293,6 +309,8 @@ export function LinkProvider({ userId, children }: { userId: string; children: R
   const pair = useCallback(async (qr: string) => {
     const code = parseQr(qr.trim());
     if (!code) throw new Error('Ce QR code ne vient pas du site Coffre.');
+    const a = await refreshAccess();
+    if (!a.active) throw new Error('Coffre Web n’est pas actif sur ton compte.');
     const mine = keyPair(random);
     const key = sharedKey(mine, code.webPublic, code.webPublic, mine.publicKey);
     const device: Device = { id: code.channelId, key: toB64(key), name: 'Navigateur', linkedAt: Date.now() };
@@ -309,14 +327,14 @@ export function LinkProvider({ userId, children }: { userId: string; children: R
     s.open();
     await persist([...devicesRef.current.filter((d) => d.id !== device.id), device]);
     return fingerprint(key);
-  }, [persist, sessionEvents]);
+  }, [persist, sessionEvents, refreshAccess]);
 
   const unlink = useCallback(async (id: string) => {
     await sessions.current.get(id)?.link.send({ t: 'unlink' }).catch(() => {});
     await remove(id);
   }, [remove]);
 
-  return <Ctx.Provider value={{ devices, pair, unlink }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ devices, access, refreshAccess, pair, unlink }}>{children}</Ctx.Provider>;
 }
 
 export function useLink(): LinkCtx {

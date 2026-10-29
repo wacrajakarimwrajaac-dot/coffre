@@ -1,7 +1,9 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useEffect } from 'react';
 import { Alert, ScrollView, Text, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Button, ListRow, SectionLabel, s } from '@/components/ui';
+import { describe } from '@/lib/link/access';
 import { useLink } from '@/lib/link/phone';
 import { C } from '@/lib/theme';
 
@@ -10,7 +12,8 @@ const when = (ts?: number) =>
 
 /** "Coffre Web": the websites linked to this phone, like WhatsApp's linked devices. */
 export default function LinkedDevices() {
-  const { devices, unlink } = useLink();
+  const { devices, access, refreshAccess, unlink } = useLink();
+  useEffect(() => void refreshAccess(), [refreshAccess]);
   const { code } = useLocalSearchParams<{ code?: string }>();
 
   const confirmUnlink = (id: string, name: string) =>
@@ -41,7 +44,14 @@ export default function LinkedDevices() {
         </View>
       ) : null}
 
-      <Button title="Connecter un appareil" onPress={() => router.push('/link/scan')} />
+      {access && (
+        <View style={[s.card, { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }]}>
+          <Icon name={access.active ? 'circle-check' : 'clock'} size={20} color={access.active ? C.ok : C.warn} />
+          <Text style={{ color: C.text, flex: 1 }}>{describe(access)}</Text>
+        </View>
+      )}
+
+      <Button title="Connecter un appareil" disabled={!!access && !access.active} onPress={() => router.push('/link/scan')} />
 
       <SectionLabel>Appareils connectés</SectionLabel>
       {devices.length === 0 ? (

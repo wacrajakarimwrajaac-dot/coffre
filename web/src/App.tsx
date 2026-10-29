@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useAccount, PRICE_LABEL } from './Account';
 import { AddDialog, type AddKind } from './AddDialog';
 import { parseBookmarks, uid, type Folder, type Item } from './db';
 import { Icon, IconTile, type IconName } from './icons';
@@ -18,6 +19,7 @@ const isMedia = (i: Item) => i.type === 'file' && /^(image|video)\//.test(i.mime
 
 export default function App() {
   const st = usePhone();
+  const account = useAccount();
   const folders = useMemo(() => [...st.folders].sort((a, b) => a.createdAt - b.createdAt), [st.folders]);
   const items = useMemo(() => [...st.items].sort((a, b) => b.createdAt - a.createdAt), [st.items]);
   const [view, setView] = useState<View>({ kind: 'home' });
@@ -187,9 +189,12 @@ export default function App() {
               </button>
             ))}
           </div>
-          <button className="side-btn danger" onClick={() => {
-            if (confirm('Déconnecter ce navigateur ?\nTon Coffre reste sur ton téléphone ; tu pourras te reconnecter en scannant un QR code.')) void phone.forget();
-          }}><Icon name="log-out" size={17} /> Déconnecter ce navigateur</button>
+          <button className="side-btn" onClick={() => {
+            if (confirm('Déconnecter ce navigateur de ton téléphone ?\nTon Coffre reste sur ton téléphone ; tu pourras te reconnecter en scannant un QR code.')) void phone.forget();
+          }}><Icon name="smartphone" size={17} /> Déconnecter le téléphone</button>
+          <button className="side-btn danger" onClick={() => void account.signOut()} title={account.email}>
+            <Icon name="log-out" size={17} /> <span className="ellipsis">Se déconnecter · {account.email}</span>
+          </button>
         </div>
       </aside>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
@@ -199,6 +204,12 @@ export default function App() {
         onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
         onDrop={onDrop}>
         <div className="content">
+          {account.access.reason === 'trial' && account.access.until && (
+            <div className="banner info">
+              Essai gratuit : encore {Math.max(1, Math.ceil((account.access.until.getTime() - Date.now()) / 86_400_000))} jour(s).
+              {account.subscribeUrl && <> <a className="text-btn" href={account.subscribeUrl} target="_blank" rel="noreferrer">S’abonner · {PRICE_LABEL}</a></>}
+            </div>
+          )}
           {st.status === 'offline' && (
             <div className="banner"><Icon name="smartphone" size={18} /> Ton téléphone est hors ligne. Ouvre Coffre dessus (avec internet) pour voir et modifier ton Coffre.</div>
           )}

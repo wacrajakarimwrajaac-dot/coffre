@@ -85,3 +85,34 @@ L'app utilise un client OAuth Google de type **« TV et appareils à saisie limi
 3. https://console.cloud.google.com/auth/audience?project=coffre-512516 → **Publier l'application** (état « En production »).
    Le champ `drive.file` n'est pas sensible : aucune validation Google n'est nécessaire. Sans ça, en mode « Test », l'accès expire après 7 jours.
 4. Recompiler l'app (`eas build --profile preview --platform android`).
+
+
+# Coffre Web : essai gratuit et abonnement
+
+Le site (Coffre Web) demande une connexion Google, puis un essai gratuit de 7 jours, puis un abonnement vendu **sur le site** (jamais dans l'app).
+Le téléphone vérifie lui aussi l'abonnement avant de servir le site (`web_access()` dans `supabase/schema.sql`, déjà appliquée au projet).
+
+## 1. Service de paiement
+Le code est prêt pour **Lemon Squeezy** (ils encaissent à ta place et gèrent la TVA). À vérifier avant de s'inscrire : qu'ils versent l'argent vers le Maroc (virement, PayPal ou Wise).
+1. Crée un produit **abonnement** (par ex. 1 €/mois) et copie son **lien de paiement** (Checkout link).
+2. Dans `web/.env.local` :
+```
+VITE_CHECKOUT_URL=https://ton-magasin.lemonsqueezy.com/checkout/buy/xxxxxxxx
+VITE_PRICE_LABEL=1 € par mois
+```
+Le site ajoute tout seul l'email et l'identifiant du compte au lien : c'est ainsi que le paiement retrouve le bon compte.
+
+## 2. Webhook (enregistre les paiements dans Supabase)
+La fonction est dans `supabase/functions/payment-webhook/`. Avec la CLI Supabase :
+```
+supabase functions deploy payment-webhook --no-verify-jwt --project-ref gsgfqdtduuepxdkoycof
+supabase secrets set LEMON_SIGNING_SECRET=<secret de signature du webhook> --project-ref gsgfqdtduuepxdkoycof
+```
+Dans Lemon Squeezy → Settings → Webhooks : URL `https://gsgfqdtduuepxdkoycof.supabase.co/functions/v1/payment-webhook`, le même secret, et coche les événements `subscription_*`.
+
+## 3. Publicité (Google AdMob)
+Par défaut l'app affiche des **annonces de test** de Google. Pour de vraies annonces :
+1. Crée un compte AdMob, ajoute l'app Android (et iPhone), crée un bloc d'annonces **Bannière** par plateforme.
+2. Remplace les identifiants de test (`androidAppId`, `iosAppId`) dans `mobile/app.json`, plugin `react-native-google-mobile-ads`.
+3. Ajoute les identifiants des blocs comme variables d'environnement EAS : `EXPO_PUBLIC_ADMOB_BANNER_ANDROID` et `EXPO_PUBLIC_ADMOB_BANNER_IOS`, puis recompile.
+4. `EXPO_PUBLIC_ADS=0` désactive les annonces.

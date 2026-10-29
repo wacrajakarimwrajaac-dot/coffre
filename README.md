@@ -44,7 +44,8 @@ npm run build    # vérification des types + build de production dans dist/
 - Partage direct depuis les autres apps vers Coffre (Android / iPhone)
 - Recherche globale et filtres par type
 - Données sur le téléphone, sauvegarde automatique dans Google Drive façon WhatsApp (dossier « Coffre » visible), restauration
-- Coffre Web : le site affiche le Coffre du téléphone après un scan de QR code, chiffré de bout en bout
+- Coffre Web : le site affiche le Coffre du téléphone après un scan de QR code, chiffré de bout en bout. Connexion Google sur le site, 7 jours d'essai gratuit puis abonnement vendu sur le site (voir [SETUP.md](SETUP.md)) ; le téléphone vérifie lui aussi l'abonnement
+- Publicité (Google AdMob) dans l'app, annonces de test tant que les vrais identifiants AdMob ne sont pas renseignés
 - Import des favoris du navigateur depuis le site (fichier HTML exporté depuis Chrome/Edge/Firefox/Safari)
 - Connexion avec Google uniquement (pas de mot de passe, pas d'email de confirmation)
 - Signalement de problèmes et suppression de compte depuis l'app

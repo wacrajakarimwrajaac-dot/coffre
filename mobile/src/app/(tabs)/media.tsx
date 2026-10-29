@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FlatList, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AdBanner } from '@/components/AdBanner';
 import { MediaThumb } from '@/components/ItemRow';
 import { Empty, Pill, s } from '@/components/ui';
 import { isMedia, kindOf } from '@/lib/media';
@@ -39,6 +40,7 @@ export default function Media() {
         ListEmptyComponent={<Empty title="Aucun média" hint="Les photos et vidéos de tous tes dossiers apparaissent ici." />}
         renderItem={({ item }) => <MediaThumb item={item} size={size} />}
       />
+      <AdBanner />
     </SafeAreaView>
   );
 }
