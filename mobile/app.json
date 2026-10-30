@@ -3,7 +3,7 @@
     "name": "Coffre",
     "slug": "coffre",
     "scheme": "coffre",
-    "version": "0.9.0",
+    "version": "0.9.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -93,14 +93,6 @@
             "image": "./assets/splash-icon.png",
             "backgroundColor": "#0b1020"
           }
-        }
-      ],
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
-          "userTrackingPermission": "Coffre utilise l’identifiant publicitaire pour afficher des annonces moins hors de propos. Tu peux refuser."
         }
       ]
     ],

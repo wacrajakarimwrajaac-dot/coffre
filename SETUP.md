@@ -110,9 +110,7 @@ supabase secrets set LEMON_SIGNING_SECRET=<secret de signature du webhook> --pro
 ```
 Dans Lemon Squeezy → Settings → Webhooks : URL `https://gsgfqdtduuepxdkoycof.supabase.co/functions/v1/payment-webhook`, le même secret, et coche les événements `subscription_*`.
 
-## 3. Publicité (Google AdMob)
-Par défaut l'app affiche des **annonces de test** de Google. Pour de vraies annonces :
-1. Crée un compte AdMob, ajoute l'app Android (et iPhone), crée un bloc d'annonces **Bannière** par plateforme.
-2. Remplace les identifiants de test (`androidAppId`, `iosAppId`) dans `mobile/app.json`, plugin `react-native-google-mobile-ads`.
-3. Ajoute les identifiants des blocs comme variables d'environnement EAS : `EXPO_PUBLIC_ADMOB_BANNER_ANDROID` et `EXPO_PUBLIC_ADMOB_BANNER_IOS`, puis recompile.
-4. `EXPO_PUBLIC_ADS=0` désactive les annonces.
+## 3. Publicité
+La publicité (Google AdMob) a été essayée dans la v0.9.0, puis retirée : le module natif bloquait l'app au démarrage (testé sur BlueStacks).
+Le code reste dans l'historique git (commit `6f84aac`). Avant de la remettre, il faut la tester sur un vrai téléphone avec les journaux (`adb logcat`),
+ou choisir un autre moyen de gagner de l'argent. La politique de confidentialité dit actuellement qu'il n'y a pas de publicité.

@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AdBanner } from '@/components/AdBanner';
 import { Icon, IconTile } from '@/components/Icon';
 import { ItemRow } from '@/components/ItemRow';
 import { Logo } from '@/components/Logo';
@@ -146,7 +145,6 @@ export default function Home() {
           await st.reload();
           router.push({ pathname: '/folder/[id]', params: { id } });
         }} />
-      <AdBanner />
     </SafeAreaView>
   );
 }
