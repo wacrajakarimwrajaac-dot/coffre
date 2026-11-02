@@ -1,28 +1,23 @@
 import qrcode from 'qrcode-generator';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Icon } from './icons';
-import { phone, usePhone } from './phone';
+import { library, useLibrary } from './library';
+import { phone, useLink } from './phone';
 
-/** WhatsApp-Web-style gate: QR code until a phone is linked, then the app (while the phone answers). */
+/** WhatsApp-Web-style gate: QR code until a phone is linked, then the app with its own local copy. */
 export function PhoneGate({ children }: { children: ReactNode }) {
-  const st = usePhone();
-  useEffect(() => phone.start(), []);
+  const link = useLink();
+  const lib = useLibrary();
+  useEffect(() => {
+    phone.start();
+    void library.load();
+  }, []);
 
-  if (st.status === 'unavailable') {
+  if (link.status === 'unavailable') {
     return <Screen><p className="error">Le relais Coffre n’est pas configuré (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).</p></Screen>;
   }
-  if (st.status === 'pairing' && st.qr) return <PairScreen qr={st.qr} />;
-  if (!st.loaded) {
-    return (
-      <Screen>
-        <div className="spinner" />
-        <h2>{st.status === 'offline' ? 'Ton téléphone ne répond pas' : 'Chargement depuis ton téléphone…'}</h2>
-        {st.code && <p className="muted">Code de vérification, le même que sur ton téléphone : <b className="code">{st.code}</b></p>}
-        <p className="muted">Ouvre Coffre sur ton téléphone et garde-le connecté à internet. Tes données restent sur le téléphone : ce site les affiche.</p>
-        <button className="ghost" onClick={() => void phone.forget()}><Icon name="qr-code" size={16} /> Afficher un nouveau QR code</button>
-      </Screen>
-    );
-  }
+  if (link.status === 'pairing' && link.qr) return <PairScreen qr={link.qr} />;
+  if (!lib.loaded) return <Screen><div className="spinner" /></Screen>;
   return <>{children}</>;
 }
 
@@ -51,7 +46,7 @@ function PairScreen({ qr }: { qr: string }) {
       <div className="pair-top"><img src="/logo-mark.png" alt="" width={30} height={30} /> Coffre Web</div>
       <div className="pair-card">
         <div className="pair-steps">
-          <h1>Utilise Coffre sur ton ordinateur</h1>
+          <h1>Mets ton Coffre sur ton ordinateur</h1>
           <ol>
             <li><span className="step">1</span><span>Ouvre <b>Coffre</b> sur ton téléphone.</span></li>
             <li><span className="step">2</span><span>Va dans <b>Réglages</b> <Icon name="chevron-right" size={14} /> <b>Coffre Web</b>.</span></li>
@@ -59,7 +54,7 @@ function PairScreen({ qr }: { qr: string }) {
           </ol>
           <div className="pair-note">
             <Icon name="shield-check" size={18} />
-            <span>Tes données restent sur ton téléphone. Ce site les affiche tant que Coffre est ouvert dessus, chiffrées de bout en bout.</span>
+            <span>Ton ordinateur garde sa propre copie de ton Coffre. Elle se met à jour avec ton téléphone quand tu appuies sur « Synchroniser » (Coffre doit alors être ouvert sur le téléphone). Tout est chiffré de bout en bout.</span>
           </div>
         </div>
         <div className="qr" aria-label="QR code à scanner avec l’app Coffre">

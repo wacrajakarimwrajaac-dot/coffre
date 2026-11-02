@@ -38,11 +38,33 @@ function checkoutUrl(userId: string, email: string): string | null {
   }
 }
 
-async function fetchAccess(): Promise<Access> {
-  const { data, error } = await supabase!.rpc('web_access');
-  const r = data?.[0];
-  if (error || !r) throw new Error(error?.message ?? 'Accès introuvable');
-  return { active: !!r.active, reason: r.reason, until: r.until ? new Date(r.until) : null };
+const ACCESS_CACHE = 'coffre.access';
+/** Without internet the last known answer is trusted for a while after its end date, so the local copy stays usable. */
+const OFFLINE_GRACE = 3 * 864e5;
+
+async function fetchAccess(userId: string): Promise<Access> {
+  try {
+    const { data, error } = await supabase!.rpc('web_access');
+    const r = data?.[0];
+    if (error || !r) throw new Error(error?.message ?? 'Accès introuvable');
+    const a: Access = { active: !!r.active, reason: r.reason, until: r.until ? new Date(r.until) : null };
+    try {
+      localStorage.setItem(ACCESS_CACHE, JSON.stringify({ userId, active: a.active, reason: a.reason, until: a.until?.getTime() ?? null }));
+    } catch {
+      /* private mode */
+    }
+    return a;
+  } catch (e) {
+    try {
+      const c = JSON.parse(localStorage.getItem(ACCESS_CACHE) ?? 'null');
+      if (c?.userId === userId && c.active && (c.until === null || c.until + OFFLINE_GRACE > Date.now())) {
+        return { active: true, reason: c.reason, until: c.until ? new Date(c.until) : null };
+      }
+    } catch {
+      /* ignore */
+    }
+    throw e;
+  }
 }
 
 export function AccountGate({ children }: { children: ReactNode }) {
@@ -59,13 +81,14 @@ export function AccountGate({ children }: { children: ReactNode }) {
 
   const userId = session?.user.id;
   const load = useCallback(async () => {
+    if (!userId) return;
     try {
-      setAccess(await fetchAccess());
+      setAccess(await fetchAccess(userId!));
       setError('');
     } catch (e) {
       setError((e as Error).message);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -91,7 +114,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
   const email = session?.user.email ?? '';
   const subscribeUrl = useMemo(() => (userId ? checkoutUrl(userId, email) : null), [userId, email]);
   const signOut = useCallback(async () => {
-    await phone.forget().catch(() => {});
+    await phone.forget().catch(() => {}); // also removes the local copy of the library
     await supabase!.auth.signOut();
   }, []);
 
@@ -119,17 +142,61 @@ function Screen({ children }: { children: ReactNode }) {
   );
 }
 
+declare global {
+  interface Window {
+    /** Present only inside the Coffre PC app (see desktop/preload.cjs). */
+    coffreDesktop?: {
+      isDesktop: boolean;
+      openExternal: (url: string) => Promise<void>;
+      onAuthCallback: (callback: (url: string) => void) => () => void;
+    };
+  }
+}
+
+const DESKTOP_REDIRECT = 'coffre-desktop://auth-callback';
+
 function SignIn() {
+  const desktop = window.coffreDesktop;
   const [error, setError] = useState('');
+  const [waiting, setWaiting] = useState(false);
+
+  // Desktop app: Google signs in through the person's own browser, which sends them back here with the tokens.
+  useEffect(() => {
+    if (!desktop) return;
+    return desktop.onAuthCallback(async (url) => {
+      const params = new URLSearchParams(url.split('#')[1] ?? url.split('?')[1] ?? '');
+      const fail = params.get('error_description') ?? params.get('error');
+      if (fail) {
+        setWaiting(false);
+        return setError(fail);
+      }
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      if (!access_token || !refresh_token) return setError('Réponse Google invalide');
+      const { error: e } = await supabase!.auth.setSession({ access_token, refresh_token });
+      if (e) setError(e.message);
+    });
+  }, [desktop]);
+
   const google = async () => {
+    setError('');
+    if (desktop) {
+      const { data, error: e } = await supabase!.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: DESKTOP_REDIRECT, skipBrowserRedirect: true } });
+      if (e || !data.url) return setError(e?.message ?? 'Connexion Google impossible');
+      await desktop.openExternal(data.url);
+      setWaiting(true);
+      return;
+    }
     const { error: e } = await supabase!.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
     if (e) setError(e.message);
   };
+
   return (
     <Screen>
       <h1>Coffre sur ton ordinateur</h1>
-      <p className="muted">Connecte-toi avec le même compte Google que sur ton téléphone. Tes données restent sur ton téléphone : ce site les affiche.</p>
+      <p className="muted">Connecte-toi avec le même compte Google que sur ton téléphone. Ton Coffre est copié sur ton ordinateur à partir de ton téléphone.</p>
       <button className="btn-google" onClick={google}><span className="g">G</span> Continuer avec Google</button>
+      {waiting && <p className="muted">Termine la connexion dans ton navigateur, puis reviens ici : cette fenêtre se met à jour toute seule.</p>}
       {error && <p className="error">{error}</p>}
       <p className="muted small">7 jours d’essai gratuit, puis {PRICE_LABEL}.</p>
     </Screen>
@@ -141,11 +208,11 @@ function Paywall({ email, access, subscribeUrl, onSignOut }: { email: string; ac
     <Screen>
       <h1>{access.reason === 'expired' ? 'Ton essai gratuit est terminé' : 'Abonnement requis'}</h1>
       <p className="muted">
-        Coffre Web affiche ton Coffre sur l’ordinateur, en direct depuis ton téléphone. Il coûte <b>{PRICE_LABEL}</b>, et l’app mobile reste gratuite.
+        Coffre PC garde une copie de ton Coffre sur l’ordinateur et la synchronise avec ton téléphone. Il coûte <b>{PRICE_LABEL}</b>, et l’app mobile reste gratuite.
       </p>
       <ul className="perks">
-        <li><Icon name="check" size={17} /> Tes dossiers, notes, liens, photos et vidéos sur grand écran</li>
-        <li><Icon name="check" size={17} /> Ajout de fichiers depuis l’ordinateur, directement sur ton téléphone</li>
+        <li><Icon name="check" size={17} /> Tes dossiers, notes, liens, photos et vidéos sur ton ordinateur, même sans téléphone</li>
+        <li><Icon name="check" size={17} /> Synchronisation dans les deux sens en un clic</li>
         <li><Icon name="check" size={17} /> Chiffré de bout en bout, rien n’est stocké sur un serveur</li>
       </ul>
       {subscribeUrl ? (

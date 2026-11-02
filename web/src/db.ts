@@ -1,5 +1,4 @@
-// Types shared with the app, the browser cache of opened files, and the bookmarks importer.
-// The library itself lives on the phone (see phone.ts).
+// Types shared with the app, the computer's own copy of the library (IndexedDB) and the bookmarks importer.
 
 export type ItemType = 'link' | 'note' | 'file';
 
@@ -9,6 +8,8 @@ export interface Folder {
   parentId: string | null;
   icon: string;
   createdAt: number;
+  /** Time of the last change (ms); createdAt when missing. */
+  updatedAt?: number;
 }
 
 export interface Item {
@@ -22,40 +23,58 @@ export interface Item {
   mime?: string;
   size?: number;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export const uid = () => crypto.randomUUID();
 
 export const INBOX = 'Boîte de réception';
 
-// ---- Cache of files already opened in this browser (IndexedDB) ----
+// ---- Local storage: the computer keeps a full copy of the library, files included ----
+
+type Store = 'folders' | 'items' | 'blobs' | 'meta';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 function open(): Promise<IDBDatabase> {
   dbPromise ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open('coffre-web-cache', 1);
-    req.onupgradeneeded = () => req.result.createObjectStore('blobs');
+    const req = indexedDB.open('coffre-pc', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      db.createObjectStore('folders', { keyPath: 'id' });
+      db.createObjectStore('items', { keyPath: 'id' });
+      db.createObjectStore('blobs');
+      db.createObjectStore('meta');
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
 }
 
-async function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest): Promise<T> {
+async function run<T>(store: Store, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest): Promise<T> {
   const db = await open();
   return new Promise((resolve, reject) => {
-    const req = fn(db.transaction('blobs', mode).objectStore('blobs'));
-    req.onsuccess = () => resolve(req.result as T);
-    req.onerror = () => reject(req.error);
+    const tx = db.transaction(store, mode);
+    const req = fn(tx.objectStore(store));
+    tx.oncomplete = () => resolve(req.result as T);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error('Stockage local interrompu'));
   });
 }
 
-export const cacheGet = (id: string) => run<Blob | undefined>('readonly', (s) => s.get(id));
-export const cachePut = (id: string, blob: Blob) => run('readwrite', (s) => s.put(blob, id));
-export const cacheDelete = (id: string) => run('readwrite', (s) => s.delete(id));
-export const cacheKeys = () => run<string[]>('readonly', (s) => s.getAllKeys());
-export const cacheClear = () => run('readwrite', (s) => s.clear());
+export const idb = {
+  all: <T,>(store: Store) => run<T[]>(store, 'readonly', (s) => s.getAll()),
+  keys: (store: Store) => run<string[]>(store, 'readonly', (s) => s.getAllKeys() as IDBRequest),
+  get: <T,>(store: Store, key: string) => run<T | undefined>(store, 'readonly', (s) => s.get(key)),
+  put: (store: Store, value: unknown, key?: string) => run(store, 'readwrite', (s) => s.put(value, key)),
+  del: (store: Store, key: string) => run(store, 'readwrite', (s) => s.delete(key)),
+  clear: (store: Store) => run(store, 'readwrite', (s) => s.clear()),
+};
+
+export async function wipeLocalData() {
+  for (const s of ['folders', 'items', 'blobs', 'meta'] as const) await idb.clear(s);
+}
 
 // ---- Browser bookmarks (Netscape HTML export from Chrome/Firefox/Edge/Safari) ----
 

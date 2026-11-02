@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, PRICE_LABEL } from './Account';
 import { AddDialog, type AddKind } from './AddDialog';
 import { parseBookmarks, uid, type Folder, type Item } from './db';
 import { Icon, IconTile, type IconName } from './icons';
 import { FolderIconDialog, ItemDialog } from './ItemDialog';
 import { ItemRow, MediaTile } from './ItemRow';
-import { phone, usePhone } from './phone';
+import { library, useLibrary } from './library';
+import { phone, useLink } from './phone';
+import { syncer, useSync } from './syncer';
 import { setThemePref, useThemePref, type ThemePref } from './theme';
 import { formatSize, hostOf, normalizeUrl } from './util';
 
@@ -15,10 +17,19 @@ type Filter = 'all' | 'link' | 'note' | 'file';
 const FILTERS: [Filter, string][] = [['all', 'Tout'], ['link', 'Liens'], ['note', 'Notes'], ['file', 'Fichiers']];
 const QUICK: [AddKind, IconName, string][] = [['link', 'link', 'Lien'], ['note', 'file-text', 'Note'], ['voice', 'mic', 'Vocal'], ['file', 'upload', 'Fichier']];
 const THEMES: [ThemePref, IconName, string][] = [['system', 'sun-moon', 'Automatique'], ['light', 'sun', 'Clair'], ['dark', 'moon', 'Sombre']];
+function ago(ts: number): string {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return 'à l’instant';
+  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
+  return `il y a ${Math.round(s / 86400)} j`;
+}
 const isMedia = (i: Item) => i.type === 'file' && /^(image|video)\//.test(i.mime ?? '');
 
 export default function App() {
-  const st = usePhone();
+  const st = useLibrary();
+  const link = useLink();
+  const sync = useSync();
   const account = useAccount();
   const folders = useMemo(() => [...st.folders].sort((a, b) => a.createdAt - b.createdAt), [st.folders]);
   const items = useMemo(() => [...st.items].sort((a, b) => b.createdAt - a.createdAt), [st.items]);
@@ -50,6 +61,29 @@ export default function App() {
       return false;
     }
   }, [toast]);
+
+  const runSync = useCallback(async () => {
+    try {
+      const r = await syncer.run();
+      const parts = [
+        r.receivedRecords || r.filesIn ? `reçu : ${r.receivedRecords} changement(s), ${r.filesIn} fichier(s)` : '',
+        r.sentRecords || r.filesOut ? `envoyé : ${r.sentRecords} changement(s), ${r.filesOut} fichier(s)` : '',
+      ].filter(Boolean);
+      if (r.cancelled) toast('Synchronisation annulée');
+      else if (r.failed.length) toast(`Synchronisation incomplète : ${r.failed[0]}${r.failed.length > 1 ? ` (+${r.failed.length - 1})` : ''}`);
+      else toast(parts.length ? `Synchronisé · ${parts.join(' · ')}` : 'Déjà à jour');
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  }, [toast]);
+
+  // Right after pairing, copy the library from the phone without waiting for a click.
+  useEffect(() => {
+    if (link.justPaired) {
+      phone.acknowledgePairing();
+      void runSync();
+    }
+  }, [link.justPaired, runSync]);
 
   const folderById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const childrenOf = useCallback(
@@ -99,31 +133,30 @@ export default function App() {
         mime: file.type || 'application/octet-stream', size: file.size, createdAt: Date.now(),
       };
       const label = list.length > 1 ? `${n + 1}/${list.length} · ${file.name}` : file.name;
-      setSending(`Envoi vers le téléphone · ${label}`);
-      const ok = await attempt(() => phone.upload(file, item, (done, total) =>
-        setSending(`Envoi vers le téléphone · ${label} · ${Math.round((done / total) * 100)} %`)));
+      setSending(`Enregistrement · ${label}`);
+      const ok = await attempt(() => library.addFile(file, item));
       if (ok) added++;
     }
     setSending(null);
-    if (added) toast(`${added} fichier${added > 1 ? 's' : ''} enregistré${added > 1 ? 's' : ''} sur ton téléphone`);
+    if (added) toast(`${added} fichier${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''} · à synchroniser avec ton téléphone`);
   };
 
   const createFolder = async (parentId: string | null) => {
     const name = prompt(parentId ? 'Nom du sous-dossier' : 'Nom du dossier');
     if (!name?.trim()) return;
     const f: Folder = { id: uid(), name: name.trim(), parentId, icon: 'folder:violet', createdAt: Date.now() };
-    if (await attempt(() => phone.saveFolder(f))) go({ kind: 'folder', id: f.id });
+    if (await attempt(() => library.saveFolder(f))) go({ kind: 'folder', id: f.id });
   };
 
   const renameFolder = (f: Folder) => {
     const name = prompt('Nouveau nom', f.name);
-    if (name?.trim() && name.trim() !== f.name) void attempt(() => phone.saveFolder({ ...f, name: name.trim() }));
+    if (name?.trim() && name.trim() !== f.name) void attempt(() => library.saveFolder({ ...f, name: name.trim() }));
   };
 
   const deleteFolder = async (f: Folder) => {
     const n = countIn(f.id);
-    if (!confirm(`Supprimer « ${f.name} », ses sous-dossiers et ${n} élément${n > 1 ? 's' : ''} ?\nIls seront supprimés de ton téléphone.`)) return;
-    if (await attempt(() => phone.deleteFolder(f.id))) go({ kind: 'home' });
+    if (!confirm(`Supprimer « ${f.name} », ses sous-dossiers et ${n} élément${n > 1 ? 's' : ''} ?\nIls seront supprimés de cet ordinateur, et de ton téléphone à la prochaine synchronisation.`)) return;
+    if (await attempt(() => library.deleteFolder(f.id))) go({ kind: 'home' });
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -131,7 +164,7 @@ export default function App() {
     setDragging(false);
     if (e.dataTransfer.files.length) return void addFiles(e.dataTransfer.files);
     const url = normalizeUrl(e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain'));
-    if (url && target) void attempt(() => phone.saveItem({ id: uid(), folderId: target.id, type: 'link', url, title: hostOf(url), createdAt: Date.now() }));
+    if (url && target) void attempt(() => library.saveItem({ id: uid(), folderId: target.id, type: 'link', url, title: hostOf(url), createdAt: Date.now() }));
   };
 
   // ---- Layout ----
@@ -143,10 +176,9 @@ export default function App() {
     ? `${visible.length} résultat${visible.length > 1 ? 's' : ''} pour « ${query.trim()} »`
     : view.kind === 'media' ? `${visible.length} photo${visible.length > 1 ? 's' : ''} et vidéo${visible.length > 1 ? 's' : ''}`
     : current ? (current.parentId ? folderLabel(current.id) : `${countIn(current.id)} élément${countIn(current.id) > 1 ? 's' : ''}`)
-    : `${items.length} élément${items.length > 1 ? 's' : ''} · enregistrés sur ton téléphone`;
-  const usage = st.usage;
-  const phoneUsed = usage && usage.totalBytes ? Math.min(100, ((usage.totalBytes - usage.freeBytes) / usage.totalBytes) * 100) : 0;
-  const coffreUsed = usage && usage.totalBytes ? Math.max(1, (usage.usedBytes / usage.totalBytes) * 100) : 0;
+    : `${items.length} élément${items.length > 1 ? 's' : ''} · enregistrés sur cet ordinateur`;
+  const usedHere = items.reduce((n, i) => n + (i.type === 'file' && st.files.has(i.id) ? i.size ?? 0 : 0), 0);
+  const usage = st.phoneUsage;
 
   return (
     <div className="app">
@@ -171,16 +203,23 @@ export default function App() {
           <div className="device">
             <span className="device-icon"><Icon name="smartphone" size={18} /></span>
             <div className="grow">
-              <div className="device-name">{st.phone || 'Téléphone'} <span className={`dot${st.status === 'online' ? ' on' : ''}`} /></div>
-              <div className="muted small">{st.status === 'online' ? 'Connecté · chiffré de bout en bout' : 'Hors ligne'}</div>
+              <div className="device-name ellipsis">{st.phone || 'Téléphone'}</div>
+              <div className="muted small">{st.lastSync ? `Synchronisé ${ago(st.lastSync)}` : 'Pas encore synchronisé'}</div>
             </div>
           </div>
-          {usage && (
+          <button className="btn primary sync-btn" disabled={sync.running} onClick={() => void runSync()}>
+            <Icon name="refresh" size={17} className={sync.running ? 'spin' : undefined} /> {sync.running ? 'Synchronisation…' : 'Synchroniser'}
+          </button>
+          {sync.running && (
             <div className="storage">
-              <div className="bar"><span style={{ width: `${coffreUsed}%` }} className="fill" /><span style={{ width: `${Math.max(0, phoneUsed - coffreUsed)}%` }} className="fill other" /></div>
-              <div className="muted small">{formatSize(usage.usedBytes)} dans Coffre{usage.totalBytes ? ` · ${formatSize(usage.freeBytes)} libres` : ''}</div>
+              {sync.fraction !== null && <div className="bar"><span className="fill" style={{ width: `${Math.round(sync.fraction * 100)}%` }} /></div>}
+              <div className="muted small">{sync.text}</div>
+              <button className="text-btn muted" onClick={() => syncer.cancel()}>Annuler</button>
             </div>
           )}
+          <div className="storage">
+            <div className="muted small">{formatSize(usedHere)} sur cet ordinateur{usage ? ` · ${formatSize(usage.usedBytes)} sur le téléphone` : ''}</div>
+          </div>
           <button className="side-btn" onClick={() => bookmarksRef.current?.click()}><Icon name="bookmark" size={17} /> Importer les favoris du navigateur</button>
           <div className="segmented" role="radiogroup" aria-label="Thème">
             {THEMES.map(([p, icon, label]) => (
@@ -190,7 +229,7 @@ export default function App() {
             ))}
           </div>
           <button className="side-btn" onClick={() => {
-            if (confirm('Déconnecter ce navigateur de ton téléphone ?\nTon Coffre reste sur ton téléphone ; tu pourras te reconnecter en scannant un QR code.')) void phone.forget();
+            if (confirm('Déconnecter ce téléphone ?\nLa copie de ton Coffre sur cet ordinateur sera supprimée (elle reste sur ton téléphone). Tu pourras la récupérer en scannant un QR code.')) void phone.forget();
           }}><Icon name="smartphone" size={17} /> Déconnecter le téléphone</button>
           <button className="side-btn danger" onClick={() => void account.signOut()} title={account.email}>
             <Icon name="log-out" size={17} /> <span className="ellipsis">Se déconnecter · {account.email}</span>
@@ -210,10 +249,9 @@ export default function App() {
               {account.subscribeUrl && <> <a className="text-btn" href={account.subscribeUrl} target="_blank" rel="noreferrer">S’abonner · {PRICE_LABEL}</a></>}
             </div>
           )}
-          {st.status === 'offline' && (
-            <div className="banner"><Icon name="smartphone" size={18} /> Ton téléphone est hors ligne. Ouvre Coffre dessus (avec internet) pour voir et modifier ton Coffre.</div>
+          {!st.lastSync && !sync.running && (
+            <div className="banner info"><Icon name="refresh" size={18} /> Appuie sur « Synchroniser » pour copier ton Coffre depuis ton téléphone. Coffre doit être ouvert sur ton téléphone.</div>
           )}
-
           <div className="topbar">
             <button className="icon-btn menu-btn" onClick={() => setMenuOpen(true)} aria-label="Menu"><Icon name="menu" /></button>
             <label className="search">
@@ -289,7 +327,7 @@ export default function App() {
                 </div>
               ) : (
                 <Empty title={query ? 'Aucun résultat' : 'Rien ici pour l’instant'}
-                  hint={query ? undefined : 'Ajoute un lien, une note ou un vocal, ou glisse des fichiers dans cette page : tout est enregistré sur ton téléphone.'} />
+                  hint={query ? undefined : 'Ajoute un lien, une note ou un vocal, ou glisse des fichiers dans cette page : tout est enregistré sur cet ordinateur, puis copié sur ton téléphone quand tu synchronises.'} />
               )}
             </>
           )}
@@ -299,17 +337,17 @@ export default function App() {
 
       {open && (
         <ItemDialog item={items.find((i) => i.id === open.id) ?? open} folders={folders} folderLabel={folderLabel} onClose={() => setOpen(null)}
-          onSave={async (it) => { if (await attempt(() => phone.saveItem(it))) setOpen(null); }}
-          onDelete={async (it) => { if (await attempt(() => phone.deleteItem(it.id))) setOpen(null); }} />
+          onSave={async (it) => { if (await attempt(() => library.saveItem(it))) setOpen(null); }}
+          onDelete={async (it) => { if (await attempt(() => library.deleteItem(it.id))) setOpen(null); }} />
       )}
       {adding && target && (
         <AddDialog kind={adding} folders={folders} folderLabel={folderLabel} defaultFolder={target.id} onClose={() => setAdding(null)}
-          onSave={async (item) => { if (await attempt(() => phone.saveItem(item))) setAdding(null); }}
+          onSave={async (item) => { if (await attempt(() => library.saveItem(item))) setAdding(null); }}
           onFiles={(files, folderId) => { setAdding(null); void addFiles(files, folderId); }} />
       )}
       {iconFor && (
         <FolderIconDialog folder={iconFor} onClose={() => setIconFor(null)}
-          onSave={async (icon) => { if (await attempt(() => phone.saveFolder({ ...iconFor, icon }))) setIconFor(null); }} />
+          onSave={async (icon) => { if (await attempt(() => library.saveFolder({ ...iconFor, icon }))) setIconFor(null); }} />
       )}
 
       <input ref={bookmarksRef} type="file" accept=".html,.htm" hidden onChange={async (e) => {
@@ -318,7 +356,7 @@ export default function App() {
         if (!f) return;
         try {
           const { folders: fs, items: its } = await parseBookmarks(f, null);
-          await phone.saveMany(fs, its);
+          await library.saveMany(fs, its);
           toast(`${its.length} favori${its.length > 1 ? 's' : ''} importé${its.length > 1 ? 's' : ''}`);
         } catch (err) {
           toast((err as Error).message);

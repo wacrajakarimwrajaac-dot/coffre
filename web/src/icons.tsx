@@ -3,7 +3,7 @@ import {
   Bed, Bike, BookOpen, Bookmark, Briefcase, Camera, Car, Check, ChevronDown, ChevronRight, Download, Droplet, Dumbbell, ExternalLink, File,
   FileText, Folder, FolderPlus, Footprints, Gamepad2, GlassWater, GraduationCap, Headphones, Heart, House, Image, Images, Inbox, Laptop, Leaf,
   Link, LogOut, Menu, Mic, Monitor, Moon, Palette, PawPrint, PenLine, Pencil, Pill, Plane, Play, Plus, Rocket, Salad, Search, ShieldCheck,
-  QrCode, ShoppingCart, Smartphone, Square, Star, Sun, SunMoon, Target, Trash2, Upload, Utensils, Video, Wallet, X, type LucideIcon,
+  QrCode, RefreshCw, ShoppingCart, Smartphone, Square, Star, Sun, SunMoon, Target, Trash2, Upload, Utensils, Video, Wallet, X, type LucideIcon,
 } from 'lucide-react';
 
 export const ICONS = {
@@ -12,7 +12,7 @@ export const ICONS = {
   file: File, 'file-text': FileText, folder: Folder, 'folder-plus': FolderPlus, footprints: Footprints, 'gamepad-2': Gamepad2,
   'glass-water': GlassWater, 'graduation-cap': GraduationCap, headphones: Headphones, heart: Heart, house: House, image: Image, images: Images,
   inbox: Inbox, laptop: Laptop, leaf: Leaf, link: Link, 'log-out': LogOut, menu: Menu, mic: Mic, monitor: Monitor, moon: Moon, palette: Palette,
-  'paw-print': PawPrint, 'qr-code': QrCode, 'pen-line': PenLine, pencil: Pencil, pill: Pill, plane: Plane, play: Play, plus: Plus, rocket: Rocket, salad: Salad,
+  'paw-print': PawPrint, 'qr-code': QrCode, refresh: RefreshCw, 'pen-line': PenLine, pencil: Pencil, pill: Pill, plane: Plane, play: Play, plus: Plus, rocket: Rocket, salad: Salad,
   search: Search, 'shield-check': ShieldCheck, 'shopping-cart': ShoppingCart, smartphone: Smartphone, square: Square, star: Star, sun: Sun,
   'sun-moon': SunMoon, target: Target, trash: Trash2, upload: Upload, utensils: Utensils, video: Video, wallet: Wallet, x: X,
 } satisfies Record<string, LucideIcon>;

@@ -1,31 +1,36 @@
-// Coffre Web, website side: shows the library that lives on the phone, through the encrypted link.
-// Nothing is stored on a server. Opened files are cached in this browser (IndexedDB) until the link is removed.
-import { useSyncExternalStore } from 'react';
-import { cacheClear, cacheDelete, cacheGet, cacheKeys, cachePut, type Folder, type Item } from './db';
-import { fingerprint, keyPair, Link, PART, qrText, sharedKey, toB64, fromB64, type Header, type KeyPair } from './link/protocol';
+// The link to the phone: pairing by QR code, then encrypted requests over the relay (see link/protocol.ts).
+// It carries nothing on its own: the computer talks to the phone only when the person presses "Synchroniser".
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { useSyncExternalStore } from 'react';
+import type { Folder, Item } from './db';
+import { fingerprint, fromB64, keyPair, Link, PART, qrText, sharedKey, toB64, type Header, type KeyPair } from './link/protocol';
+import type { Manifest, Tomb } from './link/sync';
 import { supabase } from './supabase';
+import type { Usage } from './library';
 
-export type Status = 'unavailable' | 'pairing' | 'connecting' | 'online' | 'offline';
+export type Status = 'unavailable' | 'pairing' | 'linked';
 
-export interface Usage {
-  usedBytes: number;
-  freeBytes: number;
-  totalBytes: number;
-}
-
-export interface PhoneState {
+export interface LinkState {
   status: Status;
   /** QR code text to scan with the app (pairing only). */
   qr?: string;
   /** Check code shown on both screens right after pairing. */
   code?: string;
-  phone?: string;
+  /** True once the person just paired: the first sync should start by itself. */
+  justPaired: boolean;
+}
+
+export interface SyncReply {
   folders: Folder[];
   items: Item[];
+  tombs: Tomb[];
+  wantFolders: string[];
+  wantItems: string[];
+  wantTombs: string[];
+  /** Ids of file items whose content is on the phone. */
+  files: string[];
   usage?: Usage;
-  /** False until the phone has sent its library once. */
-  loaded: boolean;
+  phone?: string;
 }
 
 const SAVED = 'coffre.link';
@@ -38,47 +43,45 @@ function relay(): SupabaseClient {
   });
   return relayClient;
 }
-// Presence costs relay messages, so the website only pings while its tab is visible: every 60 s when all is well,
-// every 15 s when the phone is away (to reconnect quickly), every 5 s until the first library arrives.
-const PING_EVERY = 60_000;
-const PING_EVERY_OFFLINE = 15_000;
-const PING_EVERY_LOADING = 5_000;
-const REPLY_WAIT = 20_000;
+
 const random = (n: number) => crypto.getRandomValues(new Uint8Array(n));
 const newId = () => toB64(random(12));
 
-function browserName(): string {
+export function browserName(): string {
   const ua = navigator.userAgent;
+  if (/Electron\//.test(ua)) return /Windows/.test(ua) ? 'Coffre PC (Windows)' : /Mac OS X/.test(ua) ? 'Coffre PC (Mac)' : 'Coffre PC (Linux)';
   const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Navigateur';
   const os = /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Android/.test(ua) ? 'Android' : /Linux/.test(ua) ? 'Linux' : /iPhone|iPad/.test(ua) ? 'iOS' : '';
   return os ? `${browser} sur ${os}` : browser;
 }
 
 interface Pending {
-  resolve: (v: Blob | void) => void;
+  resolve: (v: Blob | Header | void) => void;
   reject: (e: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  ms: number;
   parts?: Uint8Array[];
   got?: number;
   onProgress?: (done: number, total: number) => void;
 }
 
-class Phone {
-  state: PhoneState = { status: 'connecting', folders: [], items: [], loaded: false };
+const NO_ANSWER = 'Ton téléphone ne répond pas. Ouvre Coffre sur ton téléphone (avec internet) puis réessaie.';
+
+class PhoneLink {
+  state: LinkState = { status: 'pairing', justPaired: false };
   private listeners = new Set<() => void>();
   private link: Link | null = null;
-  private lastSeen = 0;
-  private pingAt = 0;
   private pending = new Map<string, Pending>();
-  private downloads = new Map<string, Promise<Blob>>();
   private started = false;
+  /** Called when the link is removed (here or from the phone): the local copy goes with it. */
+  onForget: (() => void) | null = null;
 
   subscribe = (l: () => void) => {
     this.listeners.add(l);
     return () => void this.listeners.delete(l);
   };
 
-  private set(patch: Partial<PhoneState>) {
+  private set(patch: Partial<LinkState>) {
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((l) => l());
   }
@@ -95,23 +98,6 @@ class Phone {
     }
     if (saved?.channelId && saved.key) this.connect(saved.channelId, fromB64(saved.key));
     else this.startPairing();
-
-    const tick = () => {
-      const { status, loaded } = this.state;
-      if (!this.link?.key || status === 'pairing' || status === 'unavailable') return;
-      if (document.visibilityState !== 'visible') return; // closed or hidden tab: no traffic at all
-      const now = Date.now();
-      if (this.pingAt > this.lastSeen && now - this.pingAt > REPLY_WAIT && status !== 'offline') this.set({ status: 'offline' });
-      const every = !loaded ? PING_EVERY_LOADING : this.state.status === 'offline' ? PING_EVERY_OFFLINE : PING_EVERY;
-      if (now - this.pingAt >= every) void this.ping();
-    };
-    setInterval(tick, 5_000);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        this.pingAt = 0;
-        tick();
-      }
-    });
   }
 
   private startPairing() {
@@ -125,42 +111,26 @@ class Phone {
         const key = sharedKey(kp, phonePublic, kp.publicKey, phonePublic);
         link.key = key;
         localStorage.setItem(SAVED, JSON.stringify({ channelId, key: toB64(key) }));
-        this.lastSeen = Date.now();
-        this.set({ status: 'connecting', qr: undefined, code: fingerprint(key) });
-        void this.ping();
+        this.set({ status: 'linked', qr: undefined, code: fingerprint(key), justPaired: true });
       },
     });
     this.link = link;
     link.open();
-    this.set({ status: 'pairing', qr: qrText(channelId, kp.publicKey), folders: [], items: [], loaded: false, code: undefined, phone: undefined });
+    this.set({ status: 'pairing', qr: qrText(channelId, kp.publicKey), code: undefined, justPaired: false });
   }
 
   private connect(channelId: string, key: Uint8Array) {
     this.link = new Link({ client: relay(), channelId, side: 'w', random, key, onMessage: (h, body) => this.onMessage(h, body) });
     this.link.open();
-    this.lastSeen = Date.now();
-    this.set({ status: 'connecting' });
-    void this.ping();
+    this.set({ status: 'linked', justPaired: false });
   }
 
-  /** Asks the phone for its library (hello) or just whether it is there (ping). */
-  private ping() {
-    if (!this.link?.key) return Promise.resolve();
-    this.pingAt = Date.now();
-    const full = !this.state.loaded || this.state.status !== 'online';
-    return this.link.send(full ? { t: 'hello', name: browserName() } : { t: 'ping' }).catch(() => {});
+  acknowledgePairing() {
+    if (this.state.justPaired) this.set({ justPaired: false });
   }
 
   private onMessage(h: Header, body: Uint8Array) {
-    this.lastSeen = Date.now();
-    if (this.state.status !== 'online') this.set({ status: 'online' });
     switch (h.t) {
-      case 'state': {
-        const items = (h.items as Item[]) ?? [];
-        this.set({ folders: (h.folders as Folder[]) ?? [], items, usage: h.usage as Usage, phone: String(h.phone ?? ''), loaded: true });
-        void this.pruneCache(items);
-        return;
-      }
       case 'ok':
       case 'err': {
         const p = this.pending.get(String(h.req));
@@ -169,6 +139,14 @@ class Phone {
         clearTimeout(p.timer);
         if (h.t === 'ok') p.resolve();
         else p.reject(new Error(String(h.message ?? 'Erreur sur le téléphone')));
+        return;
+      }
+      case 'syncReply': {
+        const p = this.pending.get(String(h.req));
+        if (!p) return;
+        this.pending.delete(String(h.req));
+        clearTimeout(p.timer);
+        p.resolve(h);
         return;
       }
       case 'part': {
@@ -196,22 +174,21 @@ class Phone {
     }
   }
 
-  private keepAlive(req: string, ms = 30_000) {
+  private keepAlive(req: string) {
     const p = this.pending.get(req);
     if (!p) return;
     clearTimeout(p.timer);
     p.timer = setTimeout(() => {
       this.pending.delete(req);
-      p.reject(new Error(this.state.status === 'offline' ? 'Ton téléphone est hors ligne : ouvre Coffre dessus.' : 'Le téléphone ne répond pas.'));
-    }, ms);
+      p.reject(new Error(NO_ANSWER));
+    }, p.ms);
   }
 
-  /** Waits for the phone's answer to `req` (ok / err, or the parts of a file). */
-  private expect(req: string, extra: Partial<Pending> = {}): Promise<Blob | void> {
+  /** Waits for the phone's answer to `req`. */
+  private expect(req: string, ms: number, extra: Partial<Pending> = {}) {
     if (!this.link?.key) return Promise.reject(new Error('Téléphone non connecté'));
-    if (this.state.status === 'offline') return Promise.reject(new Error('Ton téléphone est hors ligne : ouvre Coffre dessus.'));
-    return new Promise((resolve, reject) => {
-      this.pending.set(req, { resolve, reject, timer: setTimeout(() => {}, 0), ...extra });
+    return new Promise<Blob | Header | void>((resolve, reject) => {
+      this.pending.set(req, { resolve, reject, timer: setTimeout(() => {}, 0), ms, ...extra });
       this.keepAlive(req);
     });
   }
@@ -224,31 +201,38 @@ class Phone {
     p.reject(e instanceof Error ? e : new Error(String(e)));
   }
 
-  /** Sends a request and waits for the phone's answer. */
-  private request(h: Header, extra: Partial<Pending> = {}): Promise<Blob | void> {
+  private request(h: Header, ms: number, extra: Partial<Pending> = {}) {
     const req = newId();
-    const answer = this.expect(req, extra);
+    const answer = this.expect(req, ms, extra);
     this.link?.send({ ...h, req }).catch((e) => this.fail(req, e));
     return answer;
   }
 
-  // ---- Library operations (all applied on the phone, which then sends the new state) ----
+  // ---- What a sync needs ----
 
-  saveFolder = (folder: Folder) => this.request({ t: 'saveFolder', folder }) as Promise<void>;
-  deleteFolder = (id: string) => this.request({ t: 'deleteFolder', id }) as Promise<void>;
-  saveItem = (item: Item) => this.request({ t: 'saveItem', item }) as Promise<void>;
-  deleteItem = (id: string) => this.request({ t: 'deleteItem', id }) as Promise<void>;
-  saveMany = (folders: Folder[], items: Item[]) => this.request({ t: 'saveMany', folders, items }) as Promise<void>;
+  /** Sends our manifest; the phone answers with its records, what it wants and which files it has. */
+  async syncStart(manifest: Manifest): Promise<SyncReply> {
+    return (await this.request({ t: 'syncStart', manifest, name: browserName() }, 25_000)) as unknown as SyncReply;
+  }
 
-  /** Sends a file from this computer to the phone. */
-  async upload(file: File, item: Item, onProgress?: (done: number, total: number) => void) {
+  async syncApply(folders: Folder[], items: Item[], tombs: Tomb[]) {
+    await this.request({ t: 'syncApply', folders, items, tombs }, 60_000);
+  }
+
+  /** A stored file, streamed from the phone. */
+  fetchFile(id: string, onProgress?: (done: number, total: number) => void): Promise<Blob> {
+    return this.request({ t: 'get', id }, 30_000, { onProgress }) as Promise<Blob>;
+  }
+
+  /** Sends a file to the phone; the phone answers once the last part is written. */
+  async uploadFile(blob: Blob, item: Item, onProgress?: (done: number, total: number) => void) {
     const req = newId();
-    const n = Math.max(1, Math.ceil(file.size / PART));
-    const done = this.expect(req); // the phone answers once the last part is written
+    const n = Math.max(1, Math.ceil(blob.size / PART));
+    const done = this.expect(req, 30_000);
     try {
       const inFlight: Promise<void>[] = [];
       for (let i = 0; i < n && this.pending.has(req); i++) {
-        const bytes = new Uint8Array(await file.slice(i * PART, (i + 1) * PART).arrayBuffer());
+        const bytes = new Uint8Array(await blob.slice(i * PART, (i + 1) * PART).arrayBuffer());
         inFlight.push(this.link!.send({ t: 'up', req, i, n, item }, bytes).then(() => {
           this.keepAlive(req);
           onProgress?.(i + 1, n);
@@ -262,41 +246,21 @@ class Phone {
     await done;
   }
 
-  /** A stored file, from this browser's cache or streamed from the phone. */
-  getBlob(id: string, onProgress?: (done: number, total: number) => void): Promise<Blob> {
-    const running = this.downloads.get(id);
-    if (running) return running;
-    const task = (async () => {
-      const cached = await cacheGet(id);
-      if (cached) return cached;
-      const blob = (await this.request({ t: 'get', id }, { onProgress })) as Blob;
-      await cachePut(id, blob).catch(() => {});
-      return blob;
-    })().finally(() => this.downloads.delete(id));
-    this.downloads.set(id, task);
-    return task;
-  }
-
-  private async pruneCache(items: Item[]) {
-    const live = new Set(items.map((i) => i.id));
-    for (const id of await cacheKeys().catch(() => [] as string[])) if (!live.has(id)) await cacheDelete(id).catch(() => {});
-  }
-
-  /** Removes the link on this browser (and tells the phone, unless it asked). */
+  /** Removes the link on this computer (and tells the phone, unless it asked). */
   async forget(tellPhone = true) {
     if (tellPhone) await this.link?.send({ t: 'unlink' }).catch(() => {});
     this.link?.close();
     this.link = null;
     localStorage.removeItem(SAVED);
-    await cacheClear().catch(() => {});
+    this.onForget?.();
     for (const p of this.pending.values()) p.reject(new Error('Déconnecté'));
     this.pending.clear();
     this.startPairing();
   }
 }
 
-export const phone = new Phone();
+export const phone = new PhoneLink();
 
-export function usePhone(): PhoneState {
+export function useLink(): LinkState {
   return useSyncExternalStore(phone.subscribe, () => phone.state);
 }

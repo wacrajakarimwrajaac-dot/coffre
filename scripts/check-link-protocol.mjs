@@ -1,10 +1,14 @@
-// The Coffre Web link protocol must be byte-identical on the website and in the app.
+// The link protocol and the sync rules must be byte-identical on the website / PC app and in the phone app.
 import { readFileSync } from 'node:fs';
 
-const a = readFileSync(new URL('../web/src/link/protocol.ts', import.meta.url), 'utf8');
-const b = readFileSync(new URL('../mobile/src/lib/link/protocol.ts', import.meta.url), 'utf8');
-if (a !== b) {
-  console.error('web/src/link/protocol.ts and mobile/src/lib/link/protocol.ts differ: copy one over the other.');
-  process.exit(1);
+let bad = false;
+for (const f of ['protocol', 'sync']) {
+  const a = readFileSync(new URL(`../web/src/link/${f}.ts`, import.meta.url), 'utf8');
+  const b = readFileSync(new URL(`../mobile/src/lib/link/${f}.ts`, import.meta.url), 'utf8');
+  if (a !== b) {
+    console.error(`web/src/link/${f}.ts and mobile/src/lib/link/${f}.ts differ: copy one over the other.`);
+    bad = true;
+  }
 }
-console.log('link protocol: web and mobile copies are identical');
+if (bad) process.exit(1);
+console.log('link protocol and sync rules: web and mobile copies are identical');

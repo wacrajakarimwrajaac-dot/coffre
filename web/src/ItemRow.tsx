@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Item } from './db';
 import { Icon, type IconName } from './icons';
-import { phone } from './phone';
+import { library } from './library';
 import { formatSize, hostOf, linkKind, platformOf, youtubeThumb } from './util';
 
 export type Kind = 'photo' | 'video' | 'audio' | 'doc' | 'link' | 'note';
@@ -20,20 +20,21 @@ export function fileKind(mime = ''): string {
   return 'Document';
 }
 
-/** Object URL of a stored file, fetched from the phone (or this browser's cache) once `enabled`. */
+/** Object URL of a stored file, read from this computer's own copy once `enabled`. */
 export function useBlobUrl(id: string, enabled: boolean) {
-  const [state, setState] = useState<{ url: string | null; progress: number | null; error: string | null }>({ url: null, progress: null, error: null });
+  const [state, setState] = useState<{ url: string | null; error: string | null }>({ url: null, error: null });
   useEffect(() => {
     if (!enabled) return;
     let objectUrl: string | null = null;
     let alive = true;
-    phone.getBlob(id, (done, total) => alive && setState((s) => ({ ...s, progress: Math.round((done / total) * 100) })))
+    library.getBlob(id)
       .then((b) => {
         if (!alive) return;
+        if (!b) return setState({ url: null, error: 'Fichier pas encore copié sur cet ordinateur : synchronise avec ton téléphone.' });
         objectUrl = URL.createObjectURL(b);
-        setState({ url: objectUrl, progress: null, error: null });
+        setState({ url: objectUrl, error: null });
       })
-      .catch((e: Error) => alive && setState({ url: null, progress: null, error: e.message }));
+      .catch((e: Error) => alive && setState({ url: null, error: e.message }));
     return () => {
       alive = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -112,7 +113,7 @@ export function MediaTile({ item, onOpen }: { item: Item; onOpen: () => void }) 
   return (
     <button ref={ref} className="media-tile" onClick={onOpen} title={item.title}>
       {photo ? (
-        blob.url ? <img src={blob.url} alt={item.title} /> : <span className="muted small">{blob.error ? '!' : blob.progress !== null ? `${blob.progress} %` : ''}</span>
+        blob.url ? <img src={blob.url} alt={item.title} /> : <span className="muted small">{blob.error ? '!' : ''}</span>
       ) : (
         <>
           <span className="play"><Icon name="play" size={18} /></span>

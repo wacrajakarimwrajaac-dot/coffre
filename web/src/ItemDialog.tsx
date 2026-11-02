@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Folder, Item } from './db';
 import { ACCENTS, Icon, ICON_CHOICES, ICONS, parseIcon, type AccentName, type IconName } from './icons';
 import { fileKind, kindOf, useBlobUrl } from './ItemRow';
-import { phone } from './phone';
+import { library } from './library';
 import { download, formatSize, hostOf, normalizeUrl, platformOf } from './util';
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
@@ -33,8 +33,7 @@ export function ItemDialog(p: {
   const set = (patch: Partial<Item>) => setIt((x) => ({ ...x, ...patch }));
   const dirty = JSON.stringify(it) !== JSON.stringify(p.item);
   const kind = kindOf(p.item);
-  const [play, setPlay] = useState(kind === 'photo');
-  const blob = useBlobUrl(p.item.id, play);
+  const blob = useBlobUrl(p.item.id, kind === 'photo' || kind === 'video' || kind === 'audio');
   const [error, setError] = useState('');
   const platform = p.item.url ? platformOf(p.item.url) : null;
 
@@ -47,7 +46,8 @@ export function ItemDialog(p: {
 
   const fetchFile = async (open: boolean) => {
     try {
-      const b = await phone.getBlob(p.item.id);
+      const b = await library.getBlob(p.item.id);
+      if (!b) throw new Error('Fichier pas encore copié sur cet ordinateur : synchronise avec ton téléphone.');
       if (open) window.open(URL.createObjectURL(b), '_blank');
       else download(b, p.item.fileName ?? p.item.title);
     } catch (e) {
@@ -55,7 +55,6 @@ export function ItemDialog(p: {
     }
   };
 
-  const loading = play && !blob.url && !blob.error;
   return (
     <Modal title={p.item.type === 'link' ? 'Lien' : p.item.type === 'note' ? 'Note' : fileKind(p.item.mime)} onClose={p.onClose} wide={kind === 'photo' || kind === 'video'}>
       <form className="form" onSubmit={save}>
@@ -66,10 +65,7 @@ export function ItemDialog(p: {
               : kind === 'video' ? <video src={blob.url} controls autoPlay />
               : <audio src={blob.url} controls autoPlay />
             ) : (
-              <button type="button" className="preview-load" onClick={() => setPlay(true)} disabled={loading}>
-                {blob.error ? blob.error : loading ? `Chargement depuis le téléphone… ${blob.progress ?? 0} %`
-                  : <><Icon name="play" size={18} /> {kind === 'video' ? 'Lire la vidéo' : 'Écouter'} · {formatSize(p.item.size)}</>}
-              </button>
+              <p className="preview-load muted">{blob.error ?? 'Chargement…'}</p>
             )}
           </div>
         )}
@@ -95,7 +91,7 @@ export function ItemDialog(p: {
         {error && <p className="error">{error}</p>}
 
         <div className="modal-actions">
-          <button type="button" className="ghost danger" onClick={() => confirm('Supprimer cet élément ? Il sera supprimé de ton téléphone.') && p.onDelete(p.item)}>
+          <button type="button" className="ghost danger" onClick={() => confirm('Supprimer cet élément ? Il sera supprimé de cet ordinateur, et de ton téléphone à la prochaine synchronisation.') && p.onDelete(p.item)}>
             <Icon name="trash" size={17} /> Supprimer
           </button>
           <span className="grow" />

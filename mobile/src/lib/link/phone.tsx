@@ -1,18 +1,17 @@
-// Coffre Web, phone side: the phone serves its library to the websites it is linked to, like WhatsApp Web.
-// Messages (website -> phone): hello, ping, get, saveFolder, deleteFolder, saveItem, deleteItem, saveMany, up, unlink.
-// Messages (phone -> website): state, part, ok, err, alive, unlink.
+// Coffre Web / Coffre PC, phone side: the computer keeps its own full copy of the library and syncs with the phone
+// when the person presses "Synchroniser" there. The phone only answers; it never sends anything on its own.
+// Messages (computer -> phone): syncStart (its manifest), syncApply (records it sends), get (a file), up (a file), unlink.
+// Messages (phone -> computer): syncReply (records it sends, what it wants, which files it has), part (a file), ok, err, unlink.
 // Links are only open while the app is in the foreground.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getRandomBytes } from 'expo-crypto';
 import { File as FsFile, FileMode, Paths } from 'expo-file-system';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState, Platform } from 'react-native';
-import {
-  deleteFolder, deleteItem, getItem, getUsage, itemFile, loadAll, saveFolder, saveItem, saveMany, subscribe,
-  type Folder, type Item,
-} from '../data';
+import { applyRemote, getItem, getUsage, itemFile, recordsById, saveItem, syncManifest, type Folder, type Item } from '../data';
 import { supabase } from '../supabase';
 import { checkWebAccess, type WebAccess } from './access';
+import { plan, type Manifest, type Tomb } from './sync';
 import { fingerprint, fromB64, keyPair, Link, parseQr, PART, sharedKey, toB64, type Header } from './protocol';
 
 export interface Device {
@@ -39,7 +38,7 @@ function cleanFolder(x: unknown): Folder | null {
   const id = str(f?.id, 64);
   const name = str(f?.name, 200)?.trim();
   if (!id || !name) return null;
-  return { id, name, parentId: str(f?.parentId, 64) ?? null, icon: str(f?.icon, 40) ?? 'folder:violet', createdAt: num(f?.createdAt) ?? Date.now() };
+  return { id, name, parentId: str(f?.parentId, 64) ?? null, icon: str(f?.icon, 40) ?? 'folder:violet', createdAt: num(f?.createdAt) ?? Date.now(), updatedAt: num(f?.updatedAt) };
 }
 
 function cleanItem(x: unknown): Item | null {
@@ -50,8 +49,30 @@ function cleanItem(x: unknown): Item | null {
   if (!id || !folderId || (type !== 'link' && type !== 'note' && type !== 'file')) return null;
   return {
     id, folderId, type, title: str(i?.title, 500) ?? '', text: str(i?.text), url: str(i?.url, 4000),
-    fileName: str(i?.fileName, 300), mime: str(i?.mime, 120), size: num(i?.size), createdAt: num(i?.createdAt) ?? Date.now(),
+    fileName: str(i?.fileName, 300), mime: str(i?.mime, 120), size: num(i?.size), createdAt: num(i?.createdAt) ?? Date.now(), updatedAt: num(i?.updatedAt),
   };
+}
+
+const list = (x: unknown) => (Array.isArray(x) ? x : []);
+const strings = (x: unknown) => list(x).filter((v): v is string => typeof v === 'string' && v.length <= 64);
+
+function cleanTombs(x: unknown): Tomb[] {
+  return list(x).flatMap((t) => {
+    const r = t as Record<string, unknown> | null;
+    const id = str(r?.id, 64);
+    const at = num(r?.at);
+    return id && at !== undefined && (r?.kind === 'folder' || r?.kind === 'item') ? [{ id, kind: r.kind as Tomb['kind'], at }] : [];
+  });
+}
+
+function cleanManifest(x: unknown): Manifest {
+  const m = x as Record<string, unknown> | null;
+  const recs = (v: unknown) => list(v).flatMap((r) => {
+    const id = str((r as Record<string, unknown>)?.id, 64);
+    const u = num((r as Record<string, unknown>)?.u);
+    return id && u !== undefined ? [{ id, u }] : [];
+  });
+  return { folders: recs(m?.folders), items: recs(m?.items), tombs: cleanTombs(m?.tombs), files: strings(m?.files) };
 }
 
 // ---- Serving one website ----
@@ -67,35 +88,22 @@ interface Upload {
 class Session {
   link: Link;
   private uploads = new Map<string, Upload>();
-  /** Last time the website said something: library changes are only pushed while it is around. */
-  private heardAt = 0;
 
   constructor(public device: Device, private events: { seen: (id: string, name?: string) => void; unlinked: (id: string) => void }) {
     this.link = new Link({
       client: supabase, channelId: device.id, side: 'p', random, key: fromB64(device.key),
-      onMessage: (h, body) => {
-        this.heardAt = Date.now();
-        void this.handle(h, body).catch((e) => this.reply(h, e));
-      },
+      onMessage: (h, body) => void this.handle(h, body).catch((e) => this.reply(h, e)),
     });
   }
 
   open() {
     this.link.open();
-    void this.sendState(true);
   }
 
   close() {
     this.link.close();
     for (const u of this.uploads.values()) if (u.tmp.exists) u.tmp.delete();
     this.uploads.clear();
-  }
-
-  async sendState(force = false) {
-    if (!force && Date.now() - this.heardAt > 150_000) return;
-    const { folders, items } = await loadAll();
-    const usage = await getUsage();
-    await this.link.send({ t: 'state', folders, items, usage, phone: PHONE_NAME }).catch(() => {});
   }
 
   private reply(h: Header, e?: unknown) {
@@ -106,46 +114,25 @@ class Session {
 
   private async handle(h: Header, body: Uint8Array) {
     switch (h.t) {
-      case 'hello':
+      case 'syncStart': {
         this.events.seen(this.device.id, str(h.name, 80));
-        return this.sendState(true);
-      case 'ping': // presence is only answered, never sent on its own (it would use up relay messages)
-        return void this.link.send({ t: 'alive' }).catch(() => {});
+        const local = await syncManifest();
+        const p = plan(local, cleanManifest(h.manifest));
+        const send = await recordsById(p.sendFolders, p.sendItems);
+        await this.link.send({
+          t: 'syncReply', req: h.req, folders: send.folders, items: send.items, tombs: p.sendTombs,
+          wantFolders: p.wantFolders, wantItems: p.wantItems, wantTombs: p.applyTombs.map((x) => x.id), files: local.files, usage: await getUsage(), phone: PHONE_NAME,
+        });
+        return;
+      }
+      case 'syncApply': {
+        const folders = list(h.folders).map(cleanFolder).filter((f): f is Folder => !!f);
+        const items = list(h.items).map(cleanItem).filter((i): i is Item => !!i);
+        await applyRemote({ folders, items, tombs: cleanTombs(h.tombs) });
+        return this.reply(h);
+      }
       case 'get':
         return this.sendFile(h);
-      case 'saveFolder': {
-        const f = cleanFolder(h.folder);
-        if (!f) throw new Error('Dossier invalide');
-        await saveFolder(f);
-        return this.reply(h);
-      }
-      case 'deleteFolder':
-        await deleteFolder(String(h.id));
-        return this.reply(h);
-      case 'saveItem': {
-        const it = cleanItem(h.item);
-        if (!it) throw new Error('Élément invalide');
-        const existing = await getItem(it.id);
-        if (it.type === 'file' || existing?.type === 'file') {
-          // Only the title and folder of a stored file can change from the website.
-          if (!existing || existing.type !== 'file') throw new Error('Fichier introuvable sur le téléphone');
-          await saveItem({ ...existing, title: it.title, folderId: it.folderId });
-        } else {
-          await saveItem(it);
-        }
-        return this.reply(h);
-      }
-      case 'saveMany': {
-        const folders = (Array.isArray(h.folders) ? h.folders : []).map(cleanFolder).filter((f): f is Folder => !!f);
-        const items = (Array.isArray(h.items) ? h.items : []).map(cleanItem).filter((i): i is Item => !!i && i.type !== 'file');
-        await saveMany(folders, items);
-        return this.reply(h);
-      }
-      case 'deleteItem': {
-        const it = await getItem(String(h.id));
-        if (it) await deleteItem(it);
-        return this.reply(h);
-      }
       case 'up':
         return this.receivePart(h, body);
       case 'unlink':
@@ -206,7 +193,7 @@ class Session {
     const target = itemFile(u.item);
     if (target.exists) target.delete();
     u.tmp.moveSync(target);
-    await saveItem({ ...u.item, size: target.size ?? u.item.size });
+    await saveItem({ ...u.item, size: target.size ?? u.item.size }, { keepStamp: true });
     this.reply(h);
   }
 }
@@ -292,19 +279,6 @@ export function LinkProvider({ userId, children }: { userId: string; children: R
       stopAll();
     };
   }, [userId, refreshAccess, stopAll]);
-
-  // Push every change of the library to the linked websites.
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const unsubscribe = subscribe(() => {
-      clearTimeout(timer);
-      timer = setTimeout(() => sessions.current.forEach((s) => void s.sendState()), 300);
-    });
-    return () => {
-      clearTimeout(timer);
-      unsubscribe();
-    };
-  }, []);
 
   const pair = useCallback(async (qr: string) => {
     const code = parseQr(qr.trim());

@@ -1,0 +1,26 @@
+{
+  "name": "coffre-pc",
+  "version": "0.10.0",
+  "private": true,
+  "description": "Coffre PC : ta bibliothèque Coffre sur l'ordinateur, synchronisée avec ton téléphone",
+  "author": "Coffre",
+  "main": "main.cjs",
+  "scripts": {
+    "build:web": "npm --prefix ../web ci && npm --prefix ../web run build && node scripts/copy-web.mjs",
+    "start": "electron .",
+    "dist": "npm run build:web && electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.coffre.pc",
+    "productName": "Coffre",
+    "copyright": "Coffre",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.cjs", "preload.cjs", "web-dist/**"],
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.png", "artifactName": "Coffre-PC-Setup-${version}.${ext}" },
+    "nsis": { "oneClick": true, "perMachine": false, "deleteAppDataOnUninstall": false, "shortcutName": "Coffre" }
+  }
+}

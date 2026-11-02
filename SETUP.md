@@ -114,3 +114,11 @@ Dans Lemon Squeezy → Settings → Webhooks : URL `https://gsgfqdtduuepxdkoycof
 La publicité (Google AdMob) a été essayée dans la v0.9.0, puis retirée : le module natif bloquait l'app au démarrage (testé sur BlueStacks).
 Le code reste dans l'historique git (commit `6f84aac`). Avant de la remettre, il faut la tester sur un vrai téléphone avec les journaux (`adb logcat`),
 ou choisir un autre moyen de gagner de l'argent. La politique de confidentialité dit actuellement qu'il n'y a pas de publicité.
+
+
+# Coffre PC (application Windows)
+
+Voir [desktop/README.md](desktop/README.md). Ajoute dans Supabase → Authentication → URL Configuration → Redirect URLs :
+`coffre-desktop://auth-callback` (pour la connexion Google de l'application Windows).
+Les variables `VITE_CHECKOUT_URL` et `VITE_PRICE_LABEL` du paiement sont lues à la construction : pour le `.exe`, ajoute-les dans GitHub →
+Settings → Secrets and variables → Actions → **Variables**.

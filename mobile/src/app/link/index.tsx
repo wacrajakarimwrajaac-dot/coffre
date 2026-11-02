@@ -32,8 +32,8 @@ export default function LinkedDevices() {
         </View>
         <Text style={{ color: C.text, fontSize: 18, fontWeight: '700', textAlign: 'center' }}>Ton Coffre sur l’ordinateur</Text>
         <Text style={[s.muted, { textAlign: 'center', lineHeight: 20 }]}>
-          Ouvre le site Coffre sur ton ordinateur et scanne le QR code affiché. Tes données restent sur ce téléphone :
-          le site les affiche tant que Coffre est ouvert ici. Tout est chiffré de bout en bout.
+          Ouvre Coffre sur ton ordinateur et scanne le QR code affiché. L’ordinateur garde sa propre copie de ton Coffre ;
+          quand tu appuies sur « Synchroniser » là-bas, les deux se mettent à jour (Coffre doit être ouvert ici). Tout est chiffré de bout en bout.
         </Text>
       </View>
 
@@ -58,7 +58,7 @@ export default function LinkedDevices() {
         <Text style={s.muted}>Aucun pour l’instant.</Text>
       ) : (
         [...devices].sort((a, b) => b.linkedAt - a.linkedAt).map((d, i, arr) => (
-          <ListRow key={d.id} title={d.name} subtitle={`Dernière activité : ${when(d.lastSeen)}`} last={i === arr.length - 1}
+          <ListRow key={d.id} title={d.name} subtitle={`Dernière synchronisation : ${when(d.lastSeen)}`} last={i === arr.length - 1}
             left={<Icon name="laptop" size={22} color={C.muted} />}
             right={<Text style={{ color: C.danger, fontWeight: '600' }}>Déconnecter</Text>}
             onPress={() => confirmUnlink(d.id, d.name)} />

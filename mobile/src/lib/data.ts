@@ -3,6 +3,7 @@
 //   <documents>/coffre/<userId>/files/<itemId>.<ext>   photos, videos, voice notes, documents
 // Google Drive is the backup. The server only knows the account (sign-in); it stores no content.
 import { Directory, File as FsFile, Paths } from 'expo-file-system';
+import { isDeletedBy, pruneTombs, stampOf, type Manifest, type Tomb } from './link/sync';
 import { uid } from './util';
 
 export type ItemType = 'link' | 'note' | 'file';
@@ -13,6 +14,8 @@ export interface Folder {
   parentId: string | null;
   icon: string;
   createdAt: number;
+  /** Time of the last change (ms). Missing on old data: createdAt is used then. */
+  updatedAt?: number;
 }
 
 export interface Item {
@@ -26,6 +29,7 @@ export interface Item {
   mime?: string;
   size?: number;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface Usage {
@@ -38,6 +42,8 @@ interface Library {
   version: 1;
   folders: Folder[];
   items: Item[];
+  /** Deletions, kept so they can reach the other devices at their next sync. */
+  deleted: Tomb[];
   /** Set once the data of the old cloud version has been copied here. */
   migratedAt?: number;
 }
@@ -108,11 +114,11 @@ async function read(): Promise<Library> {
   if (f.exists) {
     const parsed = JSON.parse(await f.text()) as Library;
     lib = {
-      version: 1, folders: parsed.folders ?? [], migratedAt: parsed.migratedAt,
+      version: 1, folders: parsed.folders ?? [], migratedAt: parsed.migratedAt, deleted: parsed.deleted ?? [],
       items: (parsed.items ?? []).filter((i) => i.type === 'link' || i.type === 'note' || i.type === 'file'),
     };
   } else {
-    lib = { version: 1, folders: [], items: [] };
+    lib = { version: 1, folders: [], items: [], deleted: [] };
   }
   if (!lib.folders.length) lib.folders.push({ id: uid(), name: INBOX, parentId: null, icon: 'inbox:violet', createdAt: Date.now() });
   return lib;
@@ -136,13 +142,14 @@ function persist(): Promise<void> {
 }
 
 async function commit() {
+  if (lib) lib.deleted = pruneTombs(lib.deleted);
   await persist();
   notify();
 }
 
 /** Replaces the whole library (used by the cloud migration and restores). */
 export async function writeLibrary(data: { folders: Folder[]; items: Item[]; migratedAt?: number }) {
-  lib = { version: 1, folders: data.folders, items: data.items, migratedAt: data.migratedAt ?? lib?.migratedAt };
+  lib = { version: 1, folders: data.folders, items: data.items, deleted: lib?.deleted ?? [], migratedAt: data.migratedAt ?? lib?.migratedAt };
   if (!lib.folders.length) lib.folders.push({ id: uid(), name: INBOX, parentId: null, icon: 'inbox:violet', createdAt: Date.now() });
   await commit();
 }
@@ -158,11 +165,24 @@ export async function loadAll(): Promise<{ folders: Folder[]; items: Item[] }> {
 
 // ---- Folders ----
 
-export async function saveFolder(f: Folder) {
+const now = () => Date.now();
+
+/** Marks a record as changed now; a change made by the sync keeps the stamp it arrived with. */
+function touch<T extends { updatedAt?: number }>(r: T, keepStamp?: boolean): T {
+  return keepStamp && r.updatedAt !== undefined ? r : { ...r, updatedAt: now() };
+}
+
+function forget(l: Library, id: string) {
+  l.deleted = l.deleted.filter((x) => x.id !== id);
+}
+
+export async function saveFolder(f: Folder, opts: { keepStamp?: boolean } = {}) {
   const l = await read();
+  const rec = touch(f, opts.keepStamp);
   const i = l.folders.findIndex((x) => x.id === f.id);
-  if (i >= 0) l.folders[i] = f;
-  else l.folders.push(f);
+  if (i >= 0) l.folders[i] = rec;
+  else l.folders.push(rec);
+  forget(l, f.id);
   await commit();
 }
 
@@ -174,35 +194,47 @@ export async function deleteFolder(id: string) {
     l.folders.filter((f) => f.parentId === fid).forEach((c) => walk(c.id));
   };
   walk(id);
-  for (const it of l.items) if (ids.has(it.folderId) && it.type === 'file') removeFile(it);
+  const at = now();
+  for (const it of l.items) {
+    if (!ids.has(it.folderId)) continue;
+    if (it.type === 'file') removeFile(it);
+    l.deleted.push({ id: it.id, kind: 'item', at });
+  }
+  for (const fid of ids) l.deleted.push({ id: fid, kind: 'folder', at });
   l.items = l.items.filter((it) => !ids.has(it.folderId));
   l.folders = l.folders.filter((f) => !ids.has(f.id));
-  if (!l.folders.length) l.folders.push({ id: uid(), name: INBOX, parentId: null, icon: 'inbox:violet', createdAt: Date.now() });
+  if (!l.folders.length) l.folders.push({ id: uid(), name: INBOX, parentId: null, icon: 'inbox:violet', createdAt: now(), updatedAt: now() });
   await commit();
 }
 
 // ---- Items ----
 
-export async function saveItem(it: Item) {
+export async function saveItem(it: Item, opts: { keepStamp?: boolean } = {}) {
   const l = await read();
+  const rec = touch(it, opts.keepStamp);
   const i = l.items.findIndex((x) => x.id === it.id);
-  if (i >= 0) l.items[i] = it;
-  else l.items.push(it);
+  if (i >= 0) l.items[i] = rec;
+  else l.items.push(rec);
+  forget(l, it.id);
   await commit();
 }
 
-/** Adds or replaces many folders and items in one write (e.g. bookmarks imported from the website). */
+/** Adds or replaces many folders and items in one write. */
 export async function saveMany(folders: Folder[], items: Item[]) {
   const l = await read();
   for (const f of folders) {
+    const rec = touch(f);
     const i = l.folders.findIndex((x) => x.id === f.id);
-    if (i >= 0) l.folders[i] = f;
-    else l.folders.push(f);
+    if (i >= 0) l.folders[i] = rec;
+    else l.folders.push(rec);
+    forget(l, f.id);
   }
   for (const it of items) {
+    const rec = touch(it);
     const i = l.items.findIndex((x) => x.id === it.id);
-    if (i >= 0) l.items[i] = it;
-    else l.items.push(it);
+    if (i >= 0) l.items[i] = rec;
+    else l.items.push(rec);
+    forget(l, it.id);
   }
   await commit();
 }
@@ -224,6 +256,8 @@ export async function deleteItem(it: Item) {
   const l = await read();
   if (it.type === 'file') removeFile(it);
   l.items = l.items.filter((x) => x.id !== it.id);
+  forget(l, it.id);
+  l.deleted.push({ id: it.id, kind: 'item', at: now() });
   await commit();
 }
 
@@ -290,4 +324,68 @@ export function wipeLocal() {
 
 export async function migratedAt(): Promise<number | undefined> {
   return (await read()).migratedAt;
+}
+
+// ---- Sync with a computer (see link/sync.ts) ----
+
+export async function syncManifest(): Promise<Manifest> {
+  const l = await read();
+  return {
+    folders: l.folders.map((f) => ({ id: f.id, u: stampOf(f) })),
+    items: l.items.map((i) => ({ id: i.id, u: stampOf(i) })),
+    tombs: l.deleted,
+    files: l.items.filter((i) => i.type === 'file' && itemFile(i).exists).map((i) => i.id),
+  };
+}
+
+export async function recordsById(folderIds: string[], itemIds: string[]): Promise<{ folders: Folder[]; items: Item[] }> {
+  const l = await read();
+  const f = new Set(folderIds);
+  const i = new Set(itemIds);
+  return { folders: l.folders.filter((x) => f.has(x.id)), items: l.items.filter((x) => i.has(x.id)) };
+}
+
+/** Applies what the other side sent, then repairs anything left without a home (a folder deleted on one side while an item was added on the other). */
+export async function applyRemote(data: { folders: Folder[]; items: Item[]; tombs: Tomb[] }) {
+  const l = await read();
+  const tomb = new Map(l.deleted.map((x) => [x.id, x]));
+  const upsert = <T extends Folder | Item>(list: T[], r: T) => {
+    if (isDeletedBy(r, tomb.get(r.id))) return;
+    const rec = { ...r, updatedAt: stampOf(r) };
+    const i = list.findIndex((x) => x.id === r.id);
+    if (i >= 0) list[i] = rec;
+    else list.push(rec);
+    forget(l, r.id);
+  };
+  for (const f of data.folders) upsert(l.folders, f);
+  for (const it of data.items) upsert(l.items, it);
+  for (const t of data.tombs) {
+    const list = t.kind === 'folder' ? l.folders : l.items;
+    const i = list.findIndex((x) => x.id === t.id);
+    if (i >= 0 && stampOf(list[i]) > t.at) continue; // changed after the deletion: it stays
+    if (i >= 0) {
+      const gone = list.splice(i, 1)[0] as Folder | Item;
+      if (t.kind === 'item' && (gone as Item).type === 'file') removeFile(gone as Item);
+    }
+    forget(l, t.id);
+    l.deleted.push(t);
+  }
+
+  const folderIds = new Set(l.folders.map((f) => f.id));
+  for (const f of l.folders) if (f.parentId && !folderIds.has(f.parentId)) Object.assign(f, { parentId: null, updatedAt: now() });
+  const orphans = l.items.filter((it) => !folderIds.has(it.folderId));
+  if (orphans.length) {
+    let home = l.folders.find((f) => !f.parentId && f.name === INBOX);
+    if (!home) {
+      home = { id: uid(), name: INBOX, parentId: null, icon: 'inbox:violet', createdAt: now(), updatedAt: now() };
+      l.folders.push(home);
+    }
+    for (const it of orphans) Object.assign(it, { folderId: home.id, updatedAt: now() });
+  }
+  await commit();
+}
+
+/** Stores a file received from the computer next to its (already saved) item. */
+export function itemHasFile(it: Item): boolean {
+  return it.type === 'file' && itemFile(it).exists;
 }
