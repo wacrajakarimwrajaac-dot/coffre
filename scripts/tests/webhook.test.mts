@@ -1,0 +1,17 @@
+import { createHmac } from 'node:crypto';
+import { toRow, validSignature } from '../../supabase/functions/payment-webhook/lemonsqueezy.ts';
+const ok = (c: unknown, m: string) => { if (!c) { console.error('FAIL', m); process.exit(1); } console.log('ok', m); };
+const body = JSON.stringify({ meta: { event_name: 'subscription_created', custom_data: { user_id: '123e4567-e89b-12d3-a456-426614174000' } }, data: { id: '77', attributes: { status: 'active', renews_at: '2026-11-29T00:00:00Z', ends_at: null, customer_id: 5 } } });
+const sig = createHmac('sha256', 's3cret').update(body).digest('hex');
+ok(await validSignature(body, sig, 's3cret'), 'valid signature');
+ok(!(await validSignature(body, sig, 'other')), 'wrong secret rejected');
+ok(!(await validSignature(body + ' ', sig, 's3cret')), 'tampered body rejected');
+ok(!(await validSignature(body, null, 's3cret')), 'missing signature rejected');
+const r = toRow(JSON.parse(body))!;
+ok(r.status === 'active' && r.current_period_end === '2026-11-29T00:00:00.000Z' && r.provider_subscription_id === '77', 'active row');
+const mk = (event: string, attrs: object, uid = '123e4567-e89b-12d3-a456-426614174000') => toRow({ meta: { event_name: event, custom_data: { user_id: uid } }, data: { id: '1', attributes: attrs } }, new Date('2026-11-01T00:00:00Z'));
+ok(mk('subscription_cancelled', { status: 'cancelled', ends_at: '2026-12-01T00:00:00Z' })!.status === 'cancelled', 'cancelled keeps period end');
+ok(mk('subscription_expired', { status: 'expired', ends_at: '2026-10-31T00:00:00Z' })!.status === 'expired', 'expired');
+ok(mk('subscription_payment_success', { status: 'active' }) === null, 'payment events ignored');
+ok(mk('subscription_created', { status: 'active' }, 'not-a-uuid') === null, 'invalid user id ignored');
+ok(toRow({ meta: { event_name: 'order_created' } }) === null, 'other events ignored');
