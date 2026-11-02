@@ -36,4 +36,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" desktop/dist/*.exe --title "Coffre PC ${GITHUB_REF_NAME#pc-v}" --notes "Installateur Windows de Coffre PC. Au premier lancement, Windows peut afficher « Windows a protégé votre ordinateur » (le programme n'est pas signé) : clique sur « Informations complémentaires » puis « Exécuter quand même »."
+        run: |
+          gh release create "$GITHUB_REF_NAME" desktop/dist/*.exe \
+            --title "Coffre PC ${GITHUB_REF_NAME#pc-v}" \
+            --notes-file desktop/RELEASE_NOTES.md
